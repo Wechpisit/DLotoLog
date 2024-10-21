@@ -1,0 +1,44 @@
+
+# Project Documentation: LOTO Application
+
+## Overview
+This project consists of a LOTO (Lock Out, Tag Out) system that manages work requests, lock details, and approvals using a Tkinter-based GUI. The application interacts with a SQLite database to store and retrieve relevant data. The system is divided into two main parts: **database management** and **GUI interaction**.
+
+### File: combined_loto.py
+This file combines both the database operations and the GUI components.
+
+### Key Components:
+
+### 1. **Database Operations**
+- **Connection Setup**: Connects to the SQLite database and ensures the required tables are created.
+- **Functions**: CRUD operations for the tables such as `loto_active` and `loto_new`. This handles data insertions, transfers, and updates between different tables.
+    - Example functions:
+        - `insert_new_loto()`: Inserts new records into `loto_new` table.
+        - `transfer_data()`: Transfers data from `loto_new` to `loto_overview`.
+
+### 2. **GUI (Tkinter-based)**
+- **Main Components**: Forms and buttons for user input and approval workflow. These interact with the database to save records and update statuses.
+    - Example classes:
+        - `pdf`: Handles PDF selection and file display.
+        - `ET2_linebreak`: Creates custom text fields with attached PDF buttons and other widgets.
+
+### 3. **Workflows**:
+    1. **Creating a New Work Entry**:
+        - Users can input work details, attach documents, and specify departments.
+        - The form is saved to the `loto_new` table upon submission.
+    2. **Approval Workflow**:
+        - After submission, work entries can be reviewed and approved.
+        - Remarks are added, and statuses are updated from "Waiting" to "Approved".
+
+### Example Code Snippet (Function):
+
+```python
+def insert_new_loto(log_id, work_title, incharge_dept, owner, telephone, area,
+                    equipment, lock_date, loto_no, loto_keys, pid_pdf, override, remark, prepare, verify, approve):
+    # This function inserts a new entry into the loto_new table
+    with conn:
+        command = '''INSERT INTO loto_new VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'''
+        c.execute(command, (None, log_id, work_title, incharge_dept, owner, telephone, area,
+                            equipment, lock_date, loto_no, loto_keys, pid_pdf, override, remark, prepare, verify, approve))
+    conn.commit()
+```

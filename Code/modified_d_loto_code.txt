@@ -1,0 +1,66 @@
+
+# Full code of the user with added exception handling logic as required
+import tkinter as tk
+from tkinter import messagebox
+import sqlite3
+import os
+import logging
+import sys
+import time
+from datetime import datetime
+
+# Example function to capture all uncaught exceptions
+def log_exception(exc_type, exc_value, exc_traceback):
+    logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+# Register the handler to log unhandled exceptions
+sys.excepthook = log_exception
+
+# Set up logging to file for exceptions
+log_file_path = os.path.join(os.path.dirname(sys.argv[0]), 'error_log.txt')
+logging.basicConfig(filename=log_file_path, level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Database connection function with error handling
+def connect_to_database(db_path):
+    if not os.path.exists(db_path):  # Check if the database file exists
+        messagebox.showerror("Network Error", "Please try to connect to the L: drive. or check the server.")
+        return None
+
+    try:
+        conn = sqlite3.connect(db_path)  # Try to connect to the database
+        return conn
+    except sqlite3.OperationalError as e:  # Catch operational errors
+        messagebox.showerror("Database Connection Error", f"Failed to connect to the database. Error: {e}")
+        return None
+    except Exception as e:  # Catch all other exceptions
+        messagebox.showerror("Error", f"An unexpected error occurred: {e}")
+        return None
+
+# Main logic wrapped in try-except to catch unhandled exceptions
+def main():
+    try:
+        # Assuming database_path is loaded from config or set
+        db_path = "path/to/your/database.db"
+        conn = connect_to_database(db_path)
+        
+        if conn:
+            # Proceed with other logic only if the database connection was successful
+            # Example database query
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM your_table")
+            data = cursor.fetchall()
+            print(data)  # Replace this with your actual logic
+
+        # Tkinter GUI logic can follow here, also wrapped in try-except if necessary
+        root = tk.Tk()
+        root.title("LOTO-LOT1")
+        root.mainloop()
+
+    except Exception as e:
+        messagebox.showerror("Critical Error", f"An unhandled exception occurred: {e}")
+        logging.error(f"Unhandled exception: {e}", exc_info=True)
+
+if __name__ == "__main__":
+    main()
+
+# The remaining part of the code continues here with your existing code logic...
