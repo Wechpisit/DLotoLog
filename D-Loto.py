@@ -24,7 +24,7 @@ from reportlab.lib.pagesizes import A4, letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 
-print("hello")
+
 # # Set up logging to file
 # log_file_path = os.path.join(os.path.dirname(sys.argv[0]), 'error_log.txt')
 # logging.basicConfig(filename=log_file_path,
