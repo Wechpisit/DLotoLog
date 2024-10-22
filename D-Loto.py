@@ -1871,7 +1871,7 @@ class input_field_title(tk.Frame):
     # Function: Fetch data from get() to textvariable by set()
     def on_key_release(self, event):
         self.textvariable.set(self.E1.get("1.0", "end-1c"))
-
+    
     def insert_placeholder(self):
         """ Insert placeholder text into the Text widget. """
         if self.placeholder_active:
@@ -3146,7 +3146,9 @@ def create_new_loto_toplevel():
             set_focus_on_tab(1)
         
     def get_form_values():
-        work_title = v_work_title.get()
+        work_title_for_strip = v_work_title.get()
+        # Strip the white space at the last position of work title
+        work_title = work_title_for_strip.rstrip()
         incharge_dept = v_department.get()
         owner = v_owner.get()
         # internal_phone = v_internalphone.get()
