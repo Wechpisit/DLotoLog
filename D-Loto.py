@@ -24,7 +24,6 @@ from reportlab.lib.pagesizes import A4, letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 
-
 # # Set up logging to file
 # log_file_path = os.path.join(os.path.dirname(sys.argv[0]), 'error_log.txt')
 # logging.basicConfig(filename=log_file_path,
@@ -55,7 +54,6 @@ with open(config_path, "r") as f:
 database_path = config["database_path"]
 
 # # Select the Folder to create DB
-# #https://pttgrp.sharepoint.com/sites/PanelOperator/Shared Documents/Daily Log Book/LOTO
 # # directory =  resource_path("C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/LNG Project/2024/2.LOTO Project")
 # directory =  resource_path("L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO")
 # db_name = "loto_data.db"
@@ -2688,7 +2686,7 @@ class copy_rename_file_for_update_widget:
             print("The folder is empty, proceeding with a default file name.")
             total_files_found = 0
             # Extract the last part of the folder_location_input path
-            last_segment = os.path.basename(self.folder_location_input)
+            last_segment = os.path.basename(self.folder_location)
             # Split by underscores and take the part after the second one
             work_file_name_pdf = last_segment.split('_', 2)[-1]
         else:
@@ -2708,7 +2706,7 @@ class copy_rename_file_for_update_widget:
             print("No file found, proceeding with renaming")
             total_files_found = 0
             # Extract the last part of the folder_location_input path
-            last_segment = os.path.basename(self.folder_location_input)
+            last_segment = os.path.basename(self.folder_location)
             # Split by underscores and take the part after the second one
             work_file_name_pdf = last_segment.split('_', 2)[-1]  # Gets everything after the second underscore
 
@@ -2747,7 +2745,7 @@ class copy_rename_file_for_update_widget:
             print("The folder is empty, proceeding with a default file name.")
             total_files_found = 0
             # Extract the last part of the folder_location_input path
-            last_segment = os.path.basename(self.folder_location_input)
+            last_segment = os.path.basename(self.folder_location)
             # Split by underscores and take the part after the second one
             work_file_name_override = last_segment.split('_', 2)[-1]
         else:
@@ -2767,11 +2765,10 @@ class copy_rename_file_for_update_widget:
            print("No file found, proceeding with renaming")
            total_files_found = 0
             # Extract the last part of the folder_location_input path
-           last_segment = os.path.basename(self.folder_location_input)
+           last_segment = os.path.basename(self.folder_location)
             # Split by underscores and take the part after the second one
            work_file_name_override = last_segment.split('_', 2)[-1]  # Gets everything after the second underscore
         # print(f'file_location_pdf_new: {self.file_location_override_new}')
-
         file_basename_override = os.path.basename(self.file_location_override_new)
         print(f"File basename: {file_basename_override}")
         # FUNCTION: Modify file name
