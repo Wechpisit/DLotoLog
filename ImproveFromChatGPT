@@ -1,0 +1,453 @@
+#!/usr/bin/env python3
+"""
+A refactored version of the LOTO management project.
+This example shows:
+  • Modular structure and separation of concerns.
+  • An Application class that creates the main window and tabs.
+  • A DatabaseManager class for database operations.
+  • A couple of custom widget classes.
+  • Improved naming, docstrings, and error handling.
+  
+Note: This is only an illustrative excerpt. You would move many of the custom input-field classes 
+(e.g. input_field_dropdown, input_field_title, etc.) into a separate module (e.g. widgets.py).
+"""
+
+import os
+import sys
+import time
+import json
+import sqlite3
+import subprocess
+import ctypes
+from datetime import datetime
+import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
+from PIL import Image, ImageTk
+
+# Third‐party libraries (if needed for PDF etc.)
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+
+# Set DPI awareness on Windows
+ctypes.windll.shcore.SetProcessDpiAwareness(1)
+
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+def resource_path(relative_path):
+    """
+    Returns the absolute path to a resource.
+    Useful when packaging with PyInstaller.
+    """
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+
+def center_window(root, width, height):
+    """Return geometry string to center a window of (width x height)."""
+    root.update_idletasks()
+    ws = root.winfo_screenwidth()
+    hs = root.winfo_screenheight()
+    x = (ws - width) // 2
+    y = (hs - height) // 2
+    return f"{width}x{height}+{x}+{y}"
+
+
+def get_scaling_factor():
+    """
+    Get system DPI scaling factor.
+    Assumes 96 DPI is 100%.
+    """
+    user32 = ctypes.windll.user32
+    dpi = user32.GetDpiForSystem()
+    return dpi / 96  # scaling factor
+
+
+def date_str(select):
+    """
+    Returns a date string according to the select parameter:
+     1: dd/mm/yy
+     2: yyyymmdd
+     3: dd/mm/yy HH:MM
+    """
+    now = datetime.now()
+    if select == 1:
+        return now.strftime("%d/%m/%y")
+    elif select == 2:
+        return now.strftime("%Y%m%d")
+    elif select == 3:
+        return now.strftime("%d/%m/%y %H:%M")
+    return ""
+
+
+# =============================================================================
+# DATABASE MODULE
+# =============================================================================
+class DatabaseManager:
+    """Handles database connection and queries."""
+
+    def __init__(self, db_path):
+        """
+        Initialize the database connection.
+        """
+        self.db_path = db_path
+        try:
+            self.conn = sqlite3.connect(self.db_path)
+        except sqlite3.Error as err:
+            messagebox.showerror("Database Error", f"Cannot connect to database: {err}")
+            sys.exit(1)
+        self.create_tables()
+
+    def create_tables(self):
+        """
+        Create the necessary tables if they do not exist.
+        (Add your table creation SQL here.)
+        """
+        create_table_sql = """
+        CREATE TABLE IF NOT EXISTS loto_overview (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            loto_no TEXT,
+            work_description TEXT,
+            incharge TEXT,
+            effective_date TEXT,
+            status TEXT
+        );
+        """
+        try:
+            with self.conn:
+                self.conn.execute(create_table_sql)
+        except sqlite3.Error as err:
+            messagebox.showerror("Database Error", f"Error creating table: {err}")
+
+    def fetch_overview_data(self):
+        """
+        Fetch data from the loto_overview table.
+        Returns a list of tuples.
+        """
+        query = "SELECT loto_no, work_description, incharge, effective_date, status FROM loto_overview"
+        try:
+            cur = self.conn.cursor()
+            cur.execute(query)
+            return cur.fetchall()
+        except sqlite3.Error as err:
+            messagebox.showerror("Database Error", f"Error fetching data: {err}")
+            return []
+
+    def insert_new_record(self, data):
+        """
+        Insert a new record into the loto_new table.
+        :param data: Tuple with all required values.
+        """
+        sql = """
+        INSERT INTO loto_overview (loto_no, work_description, incharge, effective_date, status)
+        VALUES (?, ?, ?, ?, ?)
+        """
+        try:
+            with self.conn:
+                self.conn.execute(sql, data)
+        except sqlite3.Error as err:
+            messagebox.showerror("Database Error", f"Error inserting data: {err}")
+
+
+# =============================================================================
+# CUSTOM WIDGETS (An example; you would put many of these in widgets.py)
+# =============================================================================
+class LabeledEntry(tk.Frame):
+    """
+    A widget that contains a label and an entry (or text) field.
+    """
+    def __init__(self, master, label_text, default_text="", **kwargs):
+        super().__init__(master, bg="#dcdad5")
+        self.label_text = label_text
+        self.default_text = default_text
+        self.var = tk.StringVar(value=default_text)
+        self.label = ttk.Label(self, text=self.label_text, style="label2.TLabel")
+        self.entry = ttk.Entry(self, textvariable=self.var, style="TEntry")
+        self.label.pack(side=tk.LEFT, padx=(4, 8))
+        self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # Optionally add focus bindings to change border color, etc.
+
+    def get(self):
+        return self.var.get().strip()
+
+    def clear(self):
+        self.var.set(self.default_text)
+
+
+# =============================================================================
+# MAIN APPLICATION CLASS
+# =============================================================================
+class LotoApp(tk.Tk):
+    """Main application class for the LOTO management system."""
+
+    def __init__(self, db_manager, config):
+        super().__init__()
+        self.db_manager = db_manager
+        self.config_data = config
+        self.scaling_factor = get_scaling_factor()
+        self.title("LOTO Management")
+        self.geometry(center_window(self, int(1050 * self.scaling_factor), int(650 * self.scaling_factor)))
+        self.resizable(False, False)
+        self.setup_styles()
+        self.create_widgets()
+
+    def setup_styles(self):
+        """Set up the ttk styles and fonts."""
+        self.style = ttk.Style(self)
+        self.style.theme_use("clam")
+        # Example style configuration:
+        self.style.configure("TEntry", padding=3)
+        self.style.configure("label1.TLabel", background="#dcdad5", foreground="#4f4f4f", font=("Tahoma", 18, "bold"))
+        self.style.configure("label2.TLabel", background="#dcdad5", foreground="#4f4f4f", font=("Tahoma", 10))
+        self.style.configure("Custom.TButton", font=("Tahoma", 10), padding=6)
+
+    def create_widgets(self):
+        """Create the notebook and tabs."""
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(expand=True, fill="both")
+        self.create_overview_tab()
+        self.create_pending_tab()
+        self.create_completed_tab()
+
+    def create_overview_tab(self):
+        """Set up the Overview tab."""
+        overview_tab = ttk.Frame(self.notebook)
+        self.notebook.add(overview_tab, text="Overview")
+
+        # Create a top frame for title and buttons
+        top_frame = tk.Frame(overview_tab, bg="#dcdad5")
+        top_frame.pack(side=tk.TOP, fill=tk.X, padx=20, pady=10)
+        title_label = ttk.Label(top_frame, text="LOTO List", style="label2.TLabel")
+        title_label.pack(side=tk.LEFT)
+        new_button = ttk.Button(top_frame, text="NEW", style="Custom.TButton",
+                                command=self.open_new_record_window)
+        new_button.pack(side=tk.RIGHT, padx=4)
+        print_button = ttk.Button(top_frame, text="PRINT", style="Custom.TButton",
+                                  command=self.print_overview)
+        print_button.pack(side=tk.RIGHT, padx=4)
+
+        # Create the treeview for overview records
+        columns = ['LOTO No.', 'Work Description', 'Incharge', 'Effective Date', 'Status']
+        self.overview_tree = ttk.Treeview(overview_tab, columns=columns, show="headings", height=10)
+        self.overview_tree.pack(expand=True, fill="both", padx=20, pady=10)
+
+        # Configure headings and columns (with fixed widths)
+        col_widths = [int(90 * self.scaling_factor), int(440 * self.scaling_factor),
+                      int(130 * self.scaling_factor), int(130 * self.scaling_factor),
+                      int(95 * self.scaling_factor)]
+        for col, width in zip(columns, col_widths):
+            self.overview_tree.heading(col, text=col,
+                                         command=lambda _col=col: self.treeview_sort_column(self.overview_tree, _col, False))
+            self.overview_tree.column(col, width=width, anchor="center")
+
+        # Bind double-click to open detail view
+        self.overview_tree.bind("<Double-1>", self.on_overview_double_click)
+
+        # A status bar at the bottom of the tab
+        status_frame = tk.Frame(overview_tab, bg="#dcdad5")
+        status_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=20, pady=(0, 10))
+        self.total_label = ttk.Label(status_frame, text="Total active LOTO: 0", style="label2.TLabel")
+        self.total_label.pack(side=tk.RIGHT)
+        today_label = ttk.Label(status_frame, text=f"Today: {date_str(1)}", style="label2.TLabel")
+        today_label.pack(side=tk.LEFT)
+
+        # Load initial data
+        self.refresh_overview_data()
+
+    def refresh_overview_data(self):
+        """Refresh the data in the overview treeview."""
+        for row in self.overview_tree.get_children():
+            self.overview_tree.delete(row)
+        data = self.db_manager.fetch_overview_data()
+        for index, record in enumerate(data):
+            tag = "evenrow" if index % 2 == 0 else "oddrow"
+            self.overview_tree.insert("", tk.END, values=record, tags=(tag,))
+        self.total_label.config(text=f"Total active LOTO: {len(data)}")
+
+    def treeview_sort_column(self, tree, col, reverse):
+        """
+        Sort treeview contents when clicking on column header.
+        """
+        data = [(tree.set(child, col), child) for child in tree.get_children('')]
+        # If column contains dates, convert before sorting
+        try:
+            data.sort(key=lambda t: datetime.strptime(t[0], "%d/%m/%y"), reverse=reverse)
+        except Exception:
+            # Otherwise sort as string
+            data.sort(key=lambda t: t[0], reverse=reverse)
+        # Rearrange items in sorted order
+        for index, (_, item) in enumerate(data):
+            tree.move(item, '', index)
+        # Reverse sort next time
+        tree.heading(col, command=lambda: self.treeview_sort_column(tree, col, not reverse))
+
+    def on_overview_double_click(self, event):
+        """Handle double-click on an overview record to open detail."""
+        selected = self.overview_tree.selection()
+        if not selected:
+            return
+        record = self.overview_tree.item(selected[0], "values")
+        # Open detail window using record values (you would implement this)
+        self.open_detail_window(record)
+
+    def open_new_record_window(self):
+        """Open a new Toplevel window for adding a record."""
+        NewRecordWindow(self)
+
+    def open_detail_window(self, record):
+        """Open a detail window for the given record."""
+        DetailWindow(self, record)
+
+    def print_overview(self):
+        """Export the overview treeview to a PDF."""
+        # Call your capture_table_to_pdf() function here.
+        try:
+            from reportlab.lib.pagesizes import A4
+            file_path = os.path.join(resource_path("LOTOList"),
+                                     f"{datetime.now().strftime('%Y_%m_%d')}_LOTO_WorkList.pdf")
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            capture_table_to_pdf(self.overview_tree, file_path)
+            webbrowser.open(file_path)
+        except Exception as err:
+            messagebox.showerror("Print Error", f"Failed to print: {err}")
+
+    def create_pending_tab(self):
+        """Create the Pending tab (similar to overview)."""
+        # For brevity, similar to create_overview_tab() but using a different treeview and data fetch.
+        pass
+
+    def create_completed_tab(self):
+        """Create the Completed tab (similar to overview)."""
+        pass
+
+
+# =============================================================================
+# DETAIL AND NEW RECORD WINDOWS (Skeleton implementations)
+# =============================================================================
+class NewRecordWindow(tk.Toplevel):
+    """
+    A window for creating a new LOTO record.
+    """
+    def __init__(self, parent):
+        super().__init__(parent, bg="#dcdad5")
+        self.parent = parent
+        self.scaling_factor = parent.scaling_factor
+        self.title("New LOTO Work")
+        self.geometry(center_window(self, int(480 * self.scaling_factor), int(550 * self.scaling_factor)))
+        self.resizable(False, False)
+        self.create_form()
+
+    def create_form(self):
+        """Create the input form."""
+        # Instead of many separate functions, use instances of LabeledEntry (or custom widgets)
+        self.work_title_field = LabeledEntry(self, "Work Title:", "Isolate HP Pump A for Overhaul")
+        self.work_title_field.pack(pady=5, padx=10, fill=tk.X)
+        # Similarly add other fields: department, owner, telephone, area, equipment, lock date, loto number, etc.
+        # And add buttons for "Submit", "Clear", and "Close"
+        submit_button = ttk.Button(self, text="SUBMIT", command=self.submit)
+        submit_button.pack(pady=10)
+        cancel_button = ttk.Button(self, text="CLOSE (X)", command=self.destroy)
+        cancel_button.pack()
+
+    def submit(self):
+        """
+        Gather form values, validate them, copy any files if needed, and insert a record.
+        """
+        work_title = self.work_title_field.get()
+        if not work_title:
+            messagebox.showerror("Validation Error", "Work title is required.")
+            return
+        # Gather other values...
+        data = (  # Example tuple; update with actual fields
+            "L123", work_title, "Department Name", date_str(1), "New"
+        )
+        self.parent.db_manager.insert_new_record(data)
+        self.parent.refresh_overview_data()
+        messagebox.showinfo("Success", f'The work "{work_title}" has been created successfully.')
+        self.destroy()
+
+
+class DetailWindow(tk.Toplevel):
+    """
+    A window to show details of a LOTO record.
+    """
+    def __init__(self, parent, record):
+        super().__init__(parent, bg="#dcdad5")
+        self.parent = parent
+        self.record = record
+        self.scaling_factor = parent.scaling_factor
+        self.title("Work Detail")
+        self.geometry(center_window(self, int(480 * self.scaling_factor), int(550 * self.scaling_factor)))
+        self.resizable(False, False)
+        self.create_detail_view()
+
+    def create_detail_view(self):
+        """Display the record details."""
+        # You can use read-only versions of your custom widgets to display the details.
+        work_title_label = ttk.Label(self, text=f"Work Title: {self.record[1]}", style="label2.TLabel")
+        work_title_label.pack(pady=10)
+        # Add buttons for UPDATE, APPROVE, REJECT, etc.
+        close_button = ttk.Button(self, text="Close", command=self.destroy)
+        close_button.pack(pady=10)
+
+
+# =============================================================================
+# PDF CAPTURE FUNCTION (Example)
+# =============================================================================
+def capture_table_to_pdf(treeview, file_name):
+    """
+    Capture the content of a Treeview widget and save it as a PDF.
+    """
+    pdf = SimpleDocTemplate(file_name, pagesize=A4)
+    elements = []
+    # Create header row from treeview columns
+    headers = treeview.cget("columns")
+    data = [headers]
+    # Add rows
+    for child in treeview.get_children():
+        row = [treeview.item(child, "values")[i] for i in range(len(headers))]
+        data.append(row)
+    table = Table(data)
+    style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ])
+    table.setStyle(style)
+    styles = getSampleStyleSheet()
+    current_date = datetime.now().strftime("%d/%m/%Y")
+    total_rows = len(treeview.get_children())
+    footer = Paragraph(
+        f"Total lock box: {total_rows} <font size=8 color=grey> (as of {current_date})</font>",
+        styles['Normal']
+    )
+    elements.append(table)
+    elements.append(footer)
+    pdf.build(elements)
+    print(f"PDF saved as {file_name}")
+
+
+# =============================================================================
+# MAIN FUNCTION
+# =============================================================================
+def main():
+    # Load configuration if needed; for now, we use an empty dict.
+    config = {}
+    # Determine database path (you might want to load this from a config file)
+    db_path = resource_path("loto_data.db")
+    db_manager = DatabaseManager(db_path)
+    app = LotoApp(db_manager, config)
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    main()
