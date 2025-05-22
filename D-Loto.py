@@ -41,10 +41,10 @@ def main():
     database_path = config["database_path"]
 
     # # Select the Folder to create DB
-    # # directory =  resource_path("C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/LNG Project/2024/2.LOTO Project")
+    directory =  resource_path("C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project")
     # directory =  resource_path("L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO")
-    # db_name = "loto_data.db"
-    # database_path = os.path.join(directory,db_name)
+    db_name = "loto_data.db"
+    database_path = os.path.join(directory,db_name)
 
     # Connection test to DB 
     def connect_to_database(db_path):
