@@ -1,0 +1,11 @@
+1. เปิด Command prompt 
+1.1 เลือก Directory ที่มีไฟล์อัพเดทล่าสุดของ D-Loto.py (ปกติจะอยู่ที่โฟลเดอร์ C:\Users\wechp\OneDrive - PTT GROUP\PTTLNG\3.Project\1.LNG Project\2024\2.LOTO Project\TestBuildFromCommandLine)
+1.2. ตรวจสอบไฟล์ config.json -> ที่เก็บไฟล์ Database
+
+
+2. คัดลอกข้อความด้านล่างใส่ Command prompt
+pyinstaller --onefile --windowed D-Loto.py ^
+--add-data "C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project/TestBuildFromCommandLine/*.png;." ^
+--add-data "C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project/TestBuildFromCommandLine/*.ico;." ^
+--add-data "config.json;." ^
+--icon "C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project/TestBuildFromCommandLine/IconProgram1.ico"
