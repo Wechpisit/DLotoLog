@@ -27,6 +27,12 @@ def main():
     # Setup rev of program
     rev = '1.0.3'
 
+    # --- ENVIRONMENT SWITCH ---
+    # Set to 'dev' when running locally for testing (F5 or command line)
+    # Set to 'prod' before building .exe for production
+    ENV = 'dev'
+    # --------------------------
+
     # Helper function to get the resource path
     def resource_path(relative_path):
         # For PyInstaller temporary folder if bundled
@@ -40,11 +46,13 @@ def main():
         config = json.load(f)
     database_path = config["database_path"]
 
-    # # Select the Folder to create DB
-    # directory =  resource_path("C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project")
-    directory =  resource_path("L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO")
+    # Select the Folder to create DB based on ENV switch
+    if ENV == 'dev':
+        directory = "C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project"
+    else:
+        directory = "L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO"
     db_name = "loto_data.db"
-    database_path = os.path.join(directory,db_name)
+    database_path = os.path.join(directory, db_name)
     # Check Intranet Connection
     def check_intranet_connection():
         """Check if connected to PTT LNG intranet by pinging the server"""
@@ -65,8 +73,8 @@ def main():
 
     # Connection test to DB
     def connect_to_database(db_path):
-        # STEP 1: Check intranet connection first
-        if not check_intranet_connection():
+        # STEP 1: Check intranet connection first (skip in dev mode, database is local)
+        if ENV == 'prod' and not check_intranet_connection():
             messagebox.showerror(
                 "Intranet Connection Error",
                 "Cannot connect to PTT LNG intranet network.\n\n"
@@ -226,10 +234,59 @@ def main():
                         total_lock_days TEXT,
                         status TEXT)""")
 
+    # Create table app_info (stores app version for auto-update check)
+    c.execute("""CREATE TABLE IF NOT EXISTS app_info (
+                        key TEXT PRIMARY KEY,
+                        value TEXT)""")
+    # Seed current version on first run if not exists
+    c.execute("INSERT OR IGNORE INTO app_info (key, value) VALUES ('version', ?)", (rev,))
+    conn.commit()
+
     # the main application window
     root = tk.Tk()
-    root.title("LOTO-LOT1")
+    root.title("LOTO-LOT1" if ENV == 'prod' else "LOTO-LOT1 [DEV MODE]")
     root.resizable(False, False)
+    root.withdraw()  # Hide root window until update check passes
+
+    # Auto-update check from database version
+    def check_and_update():
+        try:
+            c.execute("SELECT value FROM app_info WHERE key = 'version'")
+            result = c.fetchone()
+            if not result:
+                return
+
+            db_version = result[0]
+
+            def version_tuple(v):
+                return tuple(int(x) for x in v.split('.'))
+
+            if version_tuple(db_version) <= version_tuple(rev):
+                return  # Already up to date
+
+            # New version found — instruct user to manually copy new exe
+            if ENV == 'dev':
+                update_folder = "C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project/update/"
+            else:  # prod
+                update_folder = "L:/4.4LO.T1/___LOTO___"
+
+            messagebox.showwarning(
+                "New Version Required",
+                f"A new version of D-LOTO is available.\n\n"
+                f"Current version : {rev}\n"
+                f"Latest version  : {db_version}\n\n"
+                f"Please copy the new D-Loto.exe from:\n"
+                f"{update_folder}\n\n"
+                f"Replace your current D-Loto.exe and run it again.\n"
+                f"The application will now close."
+            )
+            root.destroy()
+            sys.exit()
+
+        except Exception:
+            pass  # If update check fails for any reason, continue opening normally
+
+    check_and_update()
 
     # CONFIGURE: Auto adjust size of windows program
     # Get the scaling factor of the system
