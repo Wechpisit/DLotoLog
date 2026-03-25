@@ -41,13 +41,44 @@ def main():
     database_path = config["database_path"]
 
     # # Select the Folder to create DB
-    directory =  resource_path("C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project")
-    # directory =  resource_path("L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO")
+    # directory =  resource_path("C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project")
+    directory =  resource_path("L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO")
     db_name = "loto_data.db"
     database_path = os.path.join(directory,db_name)
+    # Check Intranet Connection
+    def check_intranet_connection():
+        """Check if connected to PTT LNG intranet by pinging the server"""
+        try:
+            # Ping the PTTLNG server (10.232.104.130)
+            # -n 1 = send 1 ping packet
+            # -w 2000 = wait max 2 seconds for response
+            result = subprocess.run(
+                ['ping', '-n', '1', '-w', '2000', '10.232.104.130'],
+                capture_output=True,
+                timeout=3
+            )
+            return result.returncode == 0  # 0 means success
+        except subprocess.TimeoutExpired:
+            return False  # Timeout means no connection
+        except Exception:
+            return False  # Any error means no connection
 
-    # Connection test to DB 
+    # Connection test to DB
     def connect_to_database(db_path):
+        # STEP 1: Check intranet connection first
+        if not check_intranet_connection():
+            messagebox.showerror(
+                "Intranet Connection Error",
+                "Cannot connect to PTT LNG intranet network.\n\n"
+                "Please check:\n"
+                "1. You are connected to the company network\n"
+                "2. VPN is active if working remotely\n"
+                "3. Server 10.232.104.130 is accessible\n\n"
+                "Try to reconnect to PTT LNG intranet network."
+            )
+            return None
+
+        # STEP 2: Check if database file exists
         if not os.path.exists(db_path):  # Check if the database file exists
             messagebox.showerror("Network Error", "Please try to connect to the L: drive. or check pttlng server '10.232.104.130'")
             return None
