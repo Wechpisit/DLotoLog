@@ -112,8 +112,18 @@ def perform_update(source_exe, dest_exe=None, timeout_seconds=20):
     except OSError as e:
         return False, f"ไม่สามารถติดตั้งไฟล์ใหม่ได้: {e}"
 
+    # A frozen PyInstaller onefile build uses internal env vars (e.g. _MEIPASS2)
+    # to communicate between its bootloader and the extracted runtime. If a
+    # running frozen exe spawns another frozen exe while inheriting its own
+    # environment (subprocess.Popen's default), the child can inherit stale
+    # bootstrap state from the parent and fail to extract/load itself — this
+    # only reproduces when the *launcher* is itself a frozen exe (confirmed:
+    # launching the same new exe from a plain, unfrozen Python script always
+    # worked). Strip anything PyInstaller-related so the child bootstraps clean.
+    clean_env = {k: v for k, v in os.environ.items() if not k.startswith('_MEI') and not k.startswith('_PYI')}
+
     try:
-        new_proc = subprocess.Popen([dest_exe])
+        new_proc = subprocess.Popen([dest_exe], env=clean_env)
     except OSError as e:
         # os.replace(), not os.rename(): dest_exe already exists at this point
         # (swap_in_new_exe already put the new file there) — plain os.rename()
