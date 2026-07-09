@@ -64,9 +64,14 @@ if not errorlevel 1 (
 echo กำลังติดตั้งเวอร์ชันใหม่...
 if exist "{marker}" del /f /q "{marker}"
 if exist "{backup}" del /f /q "{backup}"
+if exist "{staging}" del /f /q "{staging}"
 move /y "{dest}" "{backup}"
-copy /y "{source}" "{dest}"
-timeout /t 1 /nobreak >nul
+copy /y "{source}" "{staging}"
+ren "{staging}" "{exe_name}"
+
+echo กำลังตรวจสอบว่าคัดลอกไฟล์สำเร็จหรือไม่...
+if not exist "{dest}" goto ROLLBACK
+
 start "" "{dest}"
 
 echo กำลังตรวจสอบว่าโปรแกรมเปิดสำเร็จหรือไม่...
@@ -104,17 +109,25 @@ def build_update_script(pid, source_exe, dest_exe, marker_file, timeout_seconds=
     cmd.exe's `copy`/`move` silently fail to find forward-slash paths (e.g. paths
     read from the DB as "C:/foo/bar.exe") even though the file exists — always
     normalize to backslashes before rendering into the script.
+
+    Copies to a staging name first, then renames into place (atomic on the same
+    volume) instead of copying directly onto the final name — a straight copy
+    onto the live filename was intermittently followed by "Failed to load Python
+    DLL" when the new exe was launched immediately after, even though the same
+    file always opened fine via a normal double-click.
     """
     source_exe = os.path.normpath(source_exe)
     dest_exe = os.path.normpath(dest_exe)
     marker_file = os.path.normpath(marker_file)
     backup_exe = dest_exe + ".bak"
+    staging_exe = dest_exe + ".new"
     exe_name = os.path.basename(dest_exe)
     return UPDATE_SCRIPT_TEMPLATE.format(
         pid=pid,
         source=source_exe,
         dest=dest_exe,
         backup=backup_exe,
+        staging=staging_exe,
         marker=marker_file,
         timeout_seconds=timeout_seconds,
         exe_name=exe_name,

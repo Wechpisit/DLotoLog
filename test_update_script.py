@@ -62,9 +62,12 @@ def test_build_update_script_contains_all_paths():
     assert r'"L:\update\D-Loto.exe"' in script
     assert r'"C:\apps\D-Loto.exe"' in script
     assert r'"C:\apps\D-Loto.exe.bak"' in script
+    assert r'"C:\apps\D-Loto.exe.new"' in script
     assert r'"C:\temp\dloto_started.flag"' in script
     assert "%WAITED% GEQ 10" in script
     assert "D-Loto.exe" in script  # exe_name used in taskkill
+    assert 'ren "C:\\apps\\D-Loto.exe.new" "D-Loto.exe"' in script
+    assert "if not exist" in script  # verifies the rename succeeded before starting
 
 
 def test_build_update_script_normalizes_forward_slashes():
