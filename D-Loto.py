@@ -287,6 +287,7 @@ def main():
             pass  # If update check fails for any reason, continue opening normally
 
     check_and_update()
+    root.deiconify()  # Show root window again once update check passes
 
     # CONFIGURE: Auto adjust size of windows program
     # Get the scaling factor of the system
