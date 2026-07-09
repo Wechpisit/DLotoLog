@@ -422,8 +422,7 @@ def main():
                     )
                     dialog.destroy()
                     root.destroy()
-                    sys.exit()
-                    return
+                    os._exit(0)  # sys.exit() inside a Tk callback gets swallowed by Tkinter; force a real exit
 
                 exe_path = get_update_exe_path(c)
                 if not exe_path or not os.path.exists(exe_path):
@@ -448,12 +447,12 @@ def main():
 
                 dialog.destroy()
                 root.destroy()
-                sys.exit()
+                os._exit(0)  # sys.exit() inside a Tk callback gets swallowed by Tkinter; force a real exit
 
             def on_close():
                 dialog.destroy()
                 root.destroy()
-                sys.exit()
+                os._exit(0)  # sys.exit() inside a Tk callback gets swallowed by Tkinter; force a real exit
 
             ttk.Button(button_frame, text="อัพเดทเวอร์ชัน", style="Custom2.TButton", command=on_update).pack(side="left", padx=int(5*scaling_factor))
             ttk.Button(button_frame, text="ปิดโปรแกรม", style="Custom2.TButton", command=on_close).pack(side="left", padx=int(5*scaling_factor))
