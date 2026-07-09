@@ -92,7 +92,15 @@ python test_loto.py
 
 ### Building the Executable
 
-The application is packaged using PyInstaller. Build from the `TestBuildFromCommandLine` directory:
+**`D-Loto.py` at the project root is the single source of truth.** `TestBuildFromCommandLine/D-Loto.py` is a **generated copy** — never edit it directly, it gets overwritten on every build. Always edit the root file, then build via the sync script:
+
+```powershell
+powershell -File "TestBuildFromCommandLine/build.ps1"
+```
+
+This copies the root `D-Loto.py` into `TestBuildFromCommandLine/D-Loto.py`, then runs `pyinstaller D-Loto.spec` from that directory. The executable is generated in `TestBuildFromCommandLine/dist/D-Loto.exe`.
+
+If you ever need to run PyInstaller manually instead (e.g. `D-Loto.spec` is missing or you're troubleshooting), sync first, then build from the `TestBuildFromCommandLine` directory:
 
 ```bash
 cd "TestBuildFromCommandLine"
@@ -103,18 +111,12 @@ pyinstaller --onefile --windowed D-Loto.py ^
 --icon "C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project/TestBuildFromCommandLine/IconProgram1.ico"
 ```
 
-The executable will be generated in `dist/D-Loto.exe`.
-
-Alternatively, use the spec file:
-```bash
-pyinstaller D-Loto.spec
-```
-
 ### Build Configuration
 
 - **config.json**: Contains the database path configuration. Must be bundled with the executable.
 - **Resource files**: PNG icons and ICO files must be included via `--add-data`
 - **PyInstaller settings**: `--windowed` for GUI app (no console), `--onefile` for single executable
+- **`build.ps1`**: syncs `D-Loto.py` from root into `TestBuildFromCommandLine/` before invoking PyInstaller — see above. Prevents the two copies from drifting out of sync (a real issue hit during development: several bugfixes had to be manually re-applied to both files before this script existed).
 
 ## Architecture
 
@@ -163,11 +165,12 @@ Three main SQLite tables with status-based workflow:
 
 ### Auto-Update Check
 
-- An `app_info` table (D-Loto.py:238-243) stores a `version` key in the SQLite DB, seeded with the running app's `rev` on first launch (`INSERT OR IGNORE`)
-- On startup, `check_and_update()` (D-Loto.py:252-289) compares the DB-stored version against the local `rev`
-  - If the DB version is newer, shows a warning dialog telling the user to copy the new `.exe` from an update folder, then exits
-  - Update folder: `update/` (dev) or `L:/4.4LO.T1/___LOTO___` (prod, D-Loto.py:271) — note `TestBuildFromCommandLine/D-Loto.py` uses a different prod path (`.../6.56 LOTO/update/`); keep these in sync when editing
+- An `app_info` table stores a `version` key in the SQLite DB, seeded with the running app's `rev` on first launch (`INSERT OR IGNORE`)
+- On startup, `check_and_update()` compares the DB-stored version against the local `rev`, using `scaling_factor`/`ttk.Style`/`configure_button_styles()` set up right after `root = tk.Tk()` (moved earlier specifically so this dialog can use them — see `design-system.md`)
+  - If the DB version is newer, shows a themed modal dialog (`#dcdad5` background, Tahoma font, `Custom2.TButton` buttons, `⚠️` icon — follows `design-system.md`) with two choices: **"อัพเดทเวอร์ชัน"** (currently a placeholder — real auto-copy/relaunch logic is a planned follow-up) and **"ปิดโปรแกรม"** (closes immediately)
+  - Update folder referenced in the dialog text: `update/` (dev) or `L:/4.4LO.T1/___LOTO___` (prod)
 - To roll out a new version: bump `rev`, update the `app_info.version` row in the shared DB (e.g. via a manual `UPDATE`), and drop the new `.exe` in the update folder — existing clients will detect the mismatch and prompt users to update
+- **Editing this logic**: only edit the root `D-Loto.py` — `TestBuildFromCommandLine/D-Loto.py` is synced from it automatically by `build.ps1` (see Build and Distribution above), don't hand-edit both copies
 
 ### Key Components
 
@@ -307,9 +310,11 @@ The application requires access to PTT LNG network drive (L:) or server 10.232.1
 
 ## File Organization
 
-- `D-Loto.py`: Main application (production version in root directory)
-- `TestBuildFromCommandLine/D-Loto.py`: Build directory version for creating executable
+- `D-Loto.py`: Main application — **the single source of truth**, edit this one
+- `TestBuildFromCommandLine/D-Loto.py`: **Generated copy**, overwritten by `build.ps1` before every build — do not edit directly
+- `TestBuildFromCommandLine/build.ps1`: Syncs root `D-Loto.py` into this folder, then runs PyInstaller
 - `TestBuildFromCommandLine/config.json`: Production database configuration
+- `design-system.md`: Extracted UI style reference (colors, fonts, button styles, DPI-scaling rules, standard popup structure) — follow this for any new dialog/UI work
 - `DB_loto.py`: Standalone database operations module (legacy)
 - `combined_loto.py`, `optimized_combined_loto.py`: Earlier combined versions (legacy)
 - `loto.py`, `test.py`: Development/testing files

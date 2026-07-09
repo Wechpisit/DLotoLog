@@ -248,6 +248,35 @@ def main():
     root.resizable(False, False)
     root.withdraw()  # Hide root window until update check passes
 
+    # Get the scaling factor of the system (computed early so the update-check
+    # dialog below can scale correctly on high-DPI displays)
+    def get_scaling_factor():
+        user32 = ctypes.windll.user32
+        # Gets the DPI from the system; assuming 96 dpi is 100%
+        dpi = user32.GetDpiForSystem()
+        return dpi / 96  # Scaling factor
+    scaling_factor = get_scaling_factor()
+
+    # Configure theme
+    style = ttk.Style(root)
+    style.theme_use("clam")
+
+    # Configure button styles
+    def configure_button_styles(scaling_factor, style):
+        style.configure("Custom1.TButton",
+                    font=("tahoma", 10),  # Font family, size, and style
+                    padding=(int(12*scaling_factor), int(8*scaling_factor)), # Padding (width, height)
+                    focuscolor='none')
+        style.configure("Custom2.TButton",
+                    font=("tahoma", 9),  # Font family, size, and style
+                    padding=(int(8*scaling_factor), int(5*scaling_factor)), # Padding (width, height)
+                    focuscolor='none')
+        style.configure("Custom3.TButton",
+                    font=("tahoma", 8),  # Font family, size, and style
+                    padding=(int(4*scaling_factor), int(5*scaling_factor)), # Padding (width, height)
+                    focuscolor='none')
+    configure_button_styles(scaling_factor, style)
+
     # Auto-update check from database version
     def check_and_update():
         try:
@@ -276,11 +305,12 @@ def main():
                 pass
             dialog.grab_set()
 
-            content_frame = tk.Frame(dialog, background=DIALOG_BG, padx=20, pady=15)
+            content_frame = tk.Frame(dialog, background=DIALOG_BG,
+                                      padx=int(20*scaling_factor), pady=int(15*scaling_factor))
             content_frame.pack(fill="both", expand=True)
 
-            tk.Label(content_frame, bitmap="warning", background=DIALOG_BG).grid(
-                row=0, column=0, padx=(0, 15), sticky="n"
+            tk.Label(content_frame, text="⚠️", font=("Segoe UI Emoji", 24), background=DIALOG_BG).grid(
+                row=0, column=0, padx=(0, int(15*scaling_factor)), sticky="n"
             )
             tk.Label(
                 content_frame,
@@ -292,11 +322,11 @@ def main():
                 background=DIALOG_BG,
                 font=("Tahoma", 10),
                 justify="left",
-                wraplength=320,
+                wraplength=int(320*scaling_factor),
             ).grid(row=0, column=1, sticky="w")
 
             button_frame = tk.Frame(dialog, background=DIALOG_BG)
-            button_frame.pack(pady=(0, 15))
+            button_frame.pack(pady=(0, int(15*scaling_factor)))
 
             def on_update():
                 # TODO (Step 2): copy new exe from update folder and relaunch automatically
@@ -313,12 +343,12 @@ def main():
                 root.destroy()
                 sys.exit()
 
-            tk.Button(button_frame, text="อัพเดทเวอร์ชัน", font=("Tahoma", 9), width=16, command=on_update).pack(side="left", padx=5)
-            tk.Button(button_frame, text="ปิดโปรแกรม", font=("Tahoma", 9), width=16, command=on_close).pack(side="left", padx=5)
+            ttk.Button(button_frame, text="อัพเดทเวอร์ชัน", style="Custom2.TButton", command=on_update).pack(side="left", padx=int(5*scaling_factor))
+            ttk.Button(button_frame, text="ปิดโปรแกรม", style="Custom2.TButton", command=on_close).pack(side="left", padx=int(5*scaling_factor))
             dialog.protocol("WM_DELETE_WINDOW", on_close)
 
             dialog.update_idletasks()
-            dialog_w = max(dialog.winfo_reqwidth(), 420)
+            dialog_w = max(dialog.winfo_reqwidth(), int(420*scaling_factor))
             dialog_h = dialog.winfo_reqheight()
             x = (dialog.winfo_screenwidth() - dialog_w) // 2
             y = (dialog.winfo_screenheight() - dialog_h) // 2
@@ -333,13 +363,7 @@ def main():
     root.deiconify()  # Show root window again once update check passes
 
     # CONFIGURE: Auto adjust size of windows program
-    # Get the scaling factor of the system
-    def get_scaling_factor():
-        user32 = ctypes.windll.user32
-        # Gets the DPI from the system; assuming 96 dpi is 100%
-        dpi = user32.GetDpiForSystem()
-        return dpi / 96  # Scaling factor
-    scaling_factor = get_scaling_factor()
+    # (scaling_factor already computed earlier, before check_and_update())
 
     # Define base dimensions (for 100% scaling)
     base_width = 1050
@@ -420,9 +444,7 @@ def main():
         return FONT1,FONT2,FONT3,FONT4,FONT5,FONT6,FONT7,FONT8
     FONT1, FONT2, FONT3, FONT4, FONT5, FONT6, FONT7, FONT8 = font_setup()
 
-    # Configure theme 
-    style = ttk.Style(root)
-    style.theme_use("clam")
+    # (style already created and theme set earlier, before check_and_update())
 
     # Create and Custom TAB
     def configure_widget_style(scaling_factor, FONT1, style):
@@ -446,21 +468,7 @@ def main():
     def set_focus_on_tab(index):
         notebook.select(index)
 
-    # Configure button styles
-    def configure_button_styles(scaling_factor, style):
-        style.configure("Custom1.TButton", 
-                    font=("tahoma", 10),  # Font family, size, and style
-                    padding=(int(12*scaling_factor), int(8*scaling_factor)), # Padding (width, height)
-                    focuscolor='none')  
-        style.configure("Custom2.TButton", 
-                    font=("tahoma", 9),  # Font family, size, and style
-                    padding=(int(8*scaling_factor), int(5*scaling_factor)), # Padding (width, height)
-                    focuscolor='none')  
-        style.configure("Custom3.TButton", 
-                    font=("tahoma", 8),  # Font family, size, and style
-                    padding=(int(4*scaling_factor), int(5*scaling_factor)), # Padding (width, height)
-                    focuscolor='none')
-    configure_button_styles(scaling_factor, style)  
+    # (configure_button_styles already called earlier, before check_and_update())
 
     # Configure combobox styles
     style.configure("Custom.TCombobox", arrowsize=25) # Adjust the size of the dropdown arrow
