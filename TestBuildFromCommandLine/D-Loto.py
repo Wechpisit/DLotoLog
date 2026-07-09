@@ -46,7 +46,13 @@ def get_update_exe_path(cursor):
 
 
 UPDATE_SCRIPT_TEMPLATE = """@echo off
+chcp 65001 >nul
+title D-LOTO Update
 setlocal
+
+echo กำลังอัพเดทโปรแกรม D-LOTO
+echo กรุณารอสักครู่ อย่าปิดหน้าต่างนี้...
+echo.
 
 :WAITLOOP
 tasklist /FI "PID eq {pid}" 2>NUL | findstr /I "{pid}" >NUL
@@ -55,6 +61,7 @@ if not errorlevel 1 (
     goto WAITLOOP
 )
 
+echo กำลังติดตั้งเวอร์ชันใหม่...
 if exist "{marker}" del /f /q "{marker}"
 if exist "{backup}" del /f /q "{backup}"
 move /y "{dest}" "{backup}"
@@ -62,6 +69,7 @@ copy /y "{source}" "{dest}"
 timeout /t 1 /nobreak >nul
 start "" "{dest}"
 
+echo กำลังตรวจสอบว่าโปรแกรมเปิดสำเร็จหรือไม่...
 set WAITED=0
 :CHECKLOOP
 if exist "{marker}" goto SUCCESS
@@ -71,13 +79,18 @@ if %WAITED% GEQ {timeout_seconds} goto ROLLBACK
 goto CHECKLOOP
 
 :SUCCESS
+echo อัพเดทสำเร็จ! หน้าต่างนี้จะปิดเองในอีกสักครู่
 del /f /q "{backup}" >nul 2>nul
+timeout /t 2 /nobreak >nul
 goto CLEANUP
 
 :ROLLBACK
+echo อัพเดทไม่สำเร็จ กำลังย้อนกลับไปใช้เวอร์ชันเดิม...
 taskkill /F /IM "{exe_name}" >nul 2>nul
 move /y "{backup}" "{dest}"
 start "" "{dest}"
+echo ย้อนกลับสำเร็จ หน้าต่างนี้จะปิดเองในอีกสักครู่
+timeout /t 2 /nobreak >nul
 
 :CLEANUP
 if exist "{marker}" del /f /q "{marker}"
@@ -112,7 +125,9 @@ def write_update_script(pid, source_exe, dest_exe, marker_file, timeout_seconds=
     """Writes the rendered script to %TEMP%\\dloto_update.bat and returns its path."""
     script_text = build_update_script(pid, source_exe, dest_exe, marker_file, timeout_seconds)
     script_path = os.path.join(tempfile.gettempdir(), "dloto_update.bat")
-    with open(script_path, "w") as f:
+    # utf-8-sig: the batch script's `chcp 65001` switch expects a UTF-8 BOM to render
+    # the Thai status text correctly instead of garbled characters
+    with open(script_path, "w", encoding="utf-8-sig") as f:
         f.write(script_text)
     return script_path
 
@@ -451,7 +466,7 @@ def main():
                 script_path = write_update_script(os.getpid(), exe_path, dest_exe, marker_file)
                 subprocess.Popen(
                     ['cmd', '/c', script_path],
-                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
                 )
 
                 dialog.destroy()

@@ -95,7 +95,7 @@ def test_write_update_script_creates_file():
     )
     assert os.path.exists(path)
     assert path.endswith("dloto_update.bat")
-    with open(path) as f:
+    with open(path, encoding="utf-8-sig") as f:
         content = f.read()
     assert "1234" in content
     os.remove(path)
