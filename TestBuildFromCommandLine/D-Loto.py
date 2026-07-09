@@ -264,24 +264,67 @@ def main():
             if version_tuple(db_version) <= version_tuple(rev):
                 return  # Already up to date
 
-            # New version found — instruct user to manually copy new exe
-            if ENV == 'dev':
-                update_folder = "C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project/update/"
-            else:  # prod
-                update_folder = "L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO/update/"
+            # New version found — ask user whether to update or close
+            DIALOG_BG = '#dcdad5'
+            dialog = tk.Toplevel(root, background=DIALOG_BG)
+            dialog.title("New Version Required")
+            dialog.resizable(False, False)
+            try:
+                dialog_icon = ImageTk.PhotoImage(Image.open(resource_path("IconProgram1.ico")))
+                dialog.iconphoto(False, dialog_icon)
+            except Exception:
+                pass
+            dialog.grab_set()
 
-            messagebox.showwarning(
-                "New Version Required",
-                f"A new version of D-LOTO is available.\n\n"
-                f"Current version : {rev}\n"
-                f"Latest version  : {db_version}\n\n"
-                f"Please copy the new D-Loto.exe from:\n"
-                f"{update_folder}\n\n"
-                f"Replace your current D-Loto.exe and run it again.\n"
-                f"The application will now close."
+            content_frame = tk.Frame(dialog, background=DIALOG_BG, padx=20, pady=15)
+            content_frame.pack(fill="both", expand=True)
+
+            tk.Label(content_frame, bitmap="warning", background=DIALOG_BG).grid(
+                row=0, column=0, padx=(0, 15), sticky="n"
             )
-            root.destroy()
-            sys.exit()
+            tk.Label(
+                content_frame,
+                text=(
+                    f"มีเวอร์ชันใหม่ของ D-LOTO: {db_version}\n"
+                    f"เวอร์ชันปัจจุบัน: {rev}\n\n"
+                    f"กรุณาอัพเดทเวอร์ชันเพื่อใช้งานโปรแกรมต่อ"
+                ),
+                background=DIALOG_BG,
+                font=("Tahoma", 10),
+                justify="left",
+                wraplength=320,
+            ).grid(row=0, column=1, sticky="w")
+
+            button_frame = tk.Frame(dialog, background=DIALOG_BG)
+            button_frame.pack(pady=(0, 15))
+
+            def on_update():
+                # TODO (Step 2): copy new exe from update folder and relaunch automatically
+                messagebox.showinfo(
+                    "Update",
+                    "ฟีเจอร์อัพเดทอัตโนมัติจะถูกเพิ่มในขั้นตอนถัดไป\nโปรแกรมจะปิดตัวลงตอนนี้"
+                )
+                dialog.destroy()
+                root.destroy()
+                sys.exit()
+
+            def on_close():
+                dialog.destroy()
+                root.destroy()
+                sys.exit()
+
+            tk.Button(button_frame, text="อัพเดทเวอร์ชัน", font=("Tahoma", 9), width=16, command=on_update).pack(side="left", padx=5)
+            tk.Button(button_frame, text="ปิดโปรแกรม", font=("Tahoma", 9), width=16, command=on_close).pack(side="left", padx=5)
+            dialog.protocol("WM_DELETE_WINDOW", on_close)
+
+            dialog.update_idletasks()
+            dialog_w = max(dialog.winfo_reqwidth(), 420)
+            dialog_h = dialog.winfo_reqheight()
+            x = (dialog.winfo_screenwidth() - dialog_w) // 2
+            y = (dialog.winfo_screenheight() - dialog_h) // 2
+            dialog.geometry(f"{dialog_w}x{dialog_h}+{x}+{y}")
+
+            root.wait_window(dialog)
 
         except Exception:
             pass  # If update check fails for any reason, continue opening normally

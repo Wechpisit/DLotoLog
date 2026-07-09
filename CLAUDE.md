@@ -2,6 +2,48 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Collaboration Rules
+
+- **Always use `AskUserQuestion` tool when any requirement is unclear before implementing.** Do not assume or proceed with guesses. Confirm first, implement after.
+
+## Skills to Invoke
+
+Skills available depend on the user's installed Claude Code plugins and may change over time — treat this list as guidance current as of 2026-07, not a guarantee. When starting work in this repo, check which of these apply before acting.
+
+**Before any feature/design work (mandatory per `superpowers:using-superpowers`)**:
+- `superpowers:brainstorming` — before creating features, adding functionality, or changing behavior (e.g. designing the auto-update dialog). Explores intent/requirements before implementation.
+- `grill-me` — for **high-risk, hard-to-reverse changes** (e.g. Step 2 auto-update: overwriting the running .exe, process relaunch logic). Interviews until the design is fully resolved. Use before implementing, not after.
+- `grill-with-docs` — same as `grill-me` but also keeps CONTEXT.md/ADRs in sync as decisions are made. Prefer this over `grill-me` once this repo has docs like that to update.
+- For low-risk/additive UI tweaks (e.g. popup wording, button layout), a quick `AskUserQuestion` is enough — no need for `grill-me`.
+
+**Debugging (mandatory before proposing any fix)**:
+- `superpowers:systematic-debugging` — any bug report, hang, crash, or unexpected behavior (used to find the `root.withdraw()`/`deiconify()` root cause). Do not guess-and-patch.
+- `diagnose` — alternative disciplined reproduce→fix loop, usable interchangeably with the above.
+
+**Implementation process**:
+- `superpowers:test-driven-development` / `tdd` — before writing implementation code for a feature or bugfix, when a test harness makes sense.
+- `superpowers:writing-plans` → `superpowers:executing-plans` — for multi-step tasks with a clear spec, when the user wants a reviewable plan before code changes (e.g. the full auto-update Step 2 rollout).
+- `andrej-karpathy-skills:karpathy-guidelines` — apply throughout: minimum code for the ask, surgical edits only, state assumptions, define verifiable success criteria. (Already the default working style in this repo.)
+
+**Before claiming work done**:
+- `superpowers:verification-before-completion` — run and confirm actual output before saying a fix/feature works. Don't just claim success.
+- `verify` — drive the change end-to-end in the running app (not just read code) before considering it complete. Relevant here since this is a Tkinter desktop app with no automated UI tests.
+
+**Review**:
+- `code-review` / `simplify` — after a change is implemented, to catch correctness bugs or simplification opportunities.
+- `security-review` — if a change touches file paths, network calls, or file overwrite logic (e.g. Step 2's exe self-replace) — check for path traversal / unsafe overwrite issues.
+
+**UI work specifically**:
+- `ui-ux-pro-max` — when designing or reviewing GUI elements (dialogs, buttons, layout, color/theme consistency) — used to theme the version-check popup to match the app's `#dcdad5` / Tahoma look.
+
+**Running/testing the app**:
+- `run` — to launch and interact with `D-Loto.py` directly instead of just reading code, when asked to "run" or "test" a change live.
+
+**Documentation**:
+- `init` — only if CLAUDE.md needs a full regeneration from scratch (not for incremental updates — those are done directly).
+
+**Not typically relevant to this repo** (Windows desktop Tkinter app, no web/cloud/CI): `claude-in-chrome`, `dataviz`, `to-issues`, `to-prd`, `triage`, `schedule`, `loop`, `claude-api` (unless the app ever integrates an LLM), `fewer-permission-prompts`, `keybindings-help`, `update-config`.
+
 ## Project Overview
 
 D-LOTO is a Lock Out, Tag Out (LOTO) management system for PTT LNG operations. It's a Windows desktop application built with Python/Tkinter that manages work requests, lock details, and approval workflows using a SQLite database stored on a network drive.
@@ -41,8 +83,9 @@ python test_loto.py
 
 **Key files to modify**:
 - Version number: D-Loto.py:28
-- Employee lists: D-Loto.py:341-400 (`list_setup()` function)
-- Database path: config.json or D-Loto.py:44-47
+- Environment switch (`dev`/`prod`): D-Loto.py:33
+- Employee lists: D-Loto.py:429-490 (`list_setup()` function)
+- Database path: config.json or D-Loto.py:50-55 (ENV-based directory selection)
 - Build configuration: TestBuildFromCommandLine/D-Loto.spec
 
 ## Build and Distribution
@@ -105,13 +148,26 @@ Three main SQLite tables with status-based workflow:
 
 ### Database Connection
 
-- Database location configured in `config.json`
+- Database location configured in `config.json`, but currently overridden by an ENV-based directory (D-Loto.py:33, 50-55) rather than by `config.json` directly
 - Production path: `L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO/loto_data.db`
-- **Development override** (D-Loto.py:44-47): Hardcoded path overrides config.json during development
-- Connection includes error handling for network drive availability (D-Loto.py:50-63)
-  - Shows "Network Error" if L: drive is not accessible
-  - References server: 10.232.104.130
+- **ENV switch** (D-Loto.py:33): `ENV = 'dev'` or `'prod'`
+  - `dev`: uses a local OneDrive project folder for the DB, skips the intranet check (D-Loto.py:50-51, 77)
+  - `prod`: uses the `L:` network drive path and requires a successful intranet check before connecting (D-Loto.py:52-53, 77)
+  - Window title shows `[DEV MODE]` suffix when `ENV != 'prod'` (D-Loto.py:247)
+  - **Must be set to `'prod'` before building the production executable**
+- **Intranet check** (`check_intranet_connection()`, D-Loto.py:57-72): pings server `10.232.104.130`; only enforced when `ENV == 'prod'`
+- Connection includes error handling for network drive availability (`connect_to_database()`, D-Loto.py:75-102)
+  - Shows "Intranet Connection Error" if the ping fails in prod mode
+  - Shows "Network Error" if the DB file itself is not accessible
 - Uses `resource_path()` helper for PyInstaller compatibility with bundled resources
+
+### Auto-Update Check
+
+- An `app_info` table (D-Loto.py:238-243) stores a `version` key in the SQLite DB, seeded with the running app's `rev` on first launch (`INSERT OR IGNORE`)
+- On startup, `check_and_update()` (D-Loto.py:252-289) compares the DB-stored version against the local `rev`
+  - If the DB version is newer, shows a warning dialog telling the user to copy the new `.exe` from an update folder, then exits
+  - Update folder: `update/` (dev) or `L:/4.4LO.T1/___LOTO___` (prod, D-Loto.py:271) — note `TestBuildFromCommandLine/D-Loto.py` uses a different prod path (`.../6.56 LOTO/update/`); keep these in sync when editing
+- To roll out a new version: bump `rev`, update the `app_info.version` row in the shared DB (e.g. via a manual `UPDATE`), and drop the new `.exe` in the update folder — existing clients will detect the mismatch and prompt users to update
 
 ### Key Components
 
@@ -120,7 +176,7 @@ Three main SQLite tables with status-based workflow:
 - High DPI awareness enabled via `ctypes.windll.shcore.SetProcessDpiAwareness(1)`
 - Scaling factor calculated based on screen DPI (D-Loto.py:205)
 
-**Business Data** (D-Loto.py:341-400):
+**Business Data** (D-Loto.py:429-490):
 - Hardcoded dropdown lists defined in `list_setup()` function:
   - `incharge_list`: Departments (MT.Mech, MT.Ins, MT.Elec, ED.*, Project, LO., etc.)
   - `owner_list`: 200+ employee names (full employee roster)
@@ -193,7 +249,7 @@ Work titles are stripped of trailing whitespace before database insertion (commi
 
 ### Network Dependencies
 
-The application requires access to PTT LNG network drive (L:) or server 10.232.104.130. Connection failures show appropriate error messages to users.
+The application requires access to PTT LNG network drive (L:) or server 10.232.104.130. Connection failures show appropriate error messages to users. The intranet ping check only runs in `ENV == 'prod'` — in `'dev'` mode the app connects to a local DB copy and skips this check entirely.
 
 ### UI Considerations
 
@@ -227,9 +283,9 @@ The application requires access to PTT LNG network drive (L:) or server 10.232.1
 ## Critical Patterns and Gotchas
 
 ### Database Path Configuration
-- **Development**: Hardcoded path in D-Loto.py:44-47 overrides config.json
-- **Production**: Comment out the hardcoded path, rely on config.json
-- Always verify which path is active before building executable
+- The DB path is chosen by the `ENV` switch (D-Loto.py:33), not directly from `config.json` — `config.json`'s `database_path` is loaded but then overwritten by the ENV-based `directory` (D-Loto.py:44-55)
+- **Before building for production**: set `ENV = 'prod'` in D-Loto.py:33, otherwise the exe will still point at the dev OneDrive path and skip the intranet check
+- Always verify `ENV` is correct before building the executable
 
 ### Monolithic Architecture
 - All application code is in a single `main()` function
@@ -260,3 +316,5 @@ The application requires access to PTT LNG network drive (L:) or server 10.232.1
 - `test_loto.py`: Unit tests for database connection
 - `ImproveFromChatGPT.py`: Experimental improvements
 - `*.spec`: PyInstaller specification files for build configuration
+- `update/`: Holds the latest `D-Loto.exe` for the auto-update flow to point users to (dev-mode location)
+- `DatabaseLocation/`: Notes on where the production DB lives on Drive L:
