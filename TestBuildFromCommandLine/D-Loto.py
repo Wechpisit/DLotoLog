@@ -59,6 +59,7 @@ if exist "{marker}" del /f /q "{marker}"
 if exist "{backup}" del /f /q "{backup}"
 move /y "{dest}" "{backup}"
 copy /y "{source}" "{dest}"
+timeout /t 1 /nobreak >nul
 start "" "{dest}"
 
 set WAITED=0
