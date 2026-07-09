@@ -7,6 +7,7 @@ import datetime
 import subprocess
 import json
 import time
+import tempfile
 from tkinter import ttk,filedialog
 from tkinter import *
 from tkinter import messagebox
@@ -22,6 +23,90 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
+
+# --- Auto-update helpers (module-level: no closure state needed, and this
+# is what makes them testable in isolation — see test_update_script.py) ---
+
+def get_marker_file_path():
+    """Fixed path both the old and new .exe write to/watch, so a relaunch can detect success."""
+    return os.path.join(tempfile.gettempdir(), "dloto_started.flag")
+
+
+def mark_startup_success():
+    """Call once the app has reached its main window with no startup errors."""
+    with open(get_marker_file_path(), "w") as f:
+        f.write("ok")
+
+
+def get_update_exe_path(cursor):
+    """Reads the admin-configured path to the new .exe from app_info, or None if unset."""
+    cursor.execute("SELECT value FROM app_info WHERE key = 'exe_path'")
+    result = cursor.fetchone()
+    return result[0] if result else None
+
+
+UPDATE_SCRIPT_TEMPLATE = """@echo off
+setlocal
+
+:WAITLOOP
+tasklist /FI "PID eq {pid}" 2>NUL | findstr /I "{pid}" >NUL
+if not errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    goto WAITLOOP
+)
+
+if exist "{marker}" del /f /q "{marker}"
+if exist "{backup}" del /f /q "{backup}"
+move /y "{dest}" "{backup}"
+copy /y "{source}" "{dest}"
+start "" "{dest}"
+
+set WAITED=0
+:CHECKLOOP
+if exist "{marker}" goto SUCCESS
+timeout /t 1 /nobreak >nul
+set /a WAITED+=1
+if %WAITED% GEQ {timeout_seconds} goto ROLLBACK
+goto CHECKLOOP
+
+:SUCCESS
+del /f /q "{backup}" >nul 2>nul
+goto CLEANUP
+
+:ROLLBACK
+taskkill /F /IM "{exe_name}" >nul 2>nul
+move /y "{backup}" "{dest}"
+start "" "{dest}"
+
+:CLEANUP
+if exist "{marker}" del /f /q "{marker}"
+(goto) 2>nul & del "%~f0"
+"""
+
+
+def build_update_script(pid, source_exe, dest_exe, marker_file, timeout_seconds=10):
+    """Pure function: renders the batch script text. No file I/O — easy to unit test."""
+    backup_exe = dest_exe + ".bak"
+    exe_name = os.path.basename(dest_exe)
+    return UPDATE_SCRIPT_TEMPLATE.format(
+        pid=pid,
+        source=source_exe,
+        dest=dest_exe,
+        backup=backup_exe,
+        marker=marker_file,
+        timeout_seconds=timeout_seconds,
+        exe_name=exe_name,
+    )
+
+
+def write_update_script(pid, source_exe, dest_exe, marker_file, timeout_seconds=10):
+    """Writes the rendered script to %TEMP%\\dloto_update.bat and returns its path."""
+    script_text = build_update_script(pid, source_exe, dest_exe, marker_file, timeout_seconds)
+    script_path = os.path.join(tempfile.gettempdir(), "dloto_update.bat")
+    with open(script_path, "w") as f:
+        f.write(script_text)
+    return script_path
+
 
 def main():
     # Setup rev of program
