@@ -446,6 +446,7 @@ def main():
 
     check_and_update()
     root.deiconify()  # Show root window again once update check passes
+    mark_startup_success()  # Heartbeat file: signals a relaunching update script that startup succeeded
 
     # CONFIGURE: Auto adjust size of windows program
     # (scaling_factor already computed earlier, before check_and_update())
