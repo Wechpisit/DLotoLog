@@ -45,6 +45,23 @@ def get_update_exe_path(cursor):
     return result[0] if result else None
 
 
+def kill_process_tree(pid):
+    """Kills pid and all of its descendants.
+
+    A onefile PyInstaller build launches as two processes (a bootloader
+    wrapper plus the actual interpreter it spawns — visible in Task Manager
+    as separate PIDs). subprocess.Popen(...).kill() only kills the outer
+    wrapper PID, leaving the real app running as an orphan — confirmed to
+    be the cause of a stale rolled-back exe leaving a duplicate window open.
+    `taskkill /T` kills the whole tree.
+    """
+    subprocess.run(
+        ['taskkill', '/T', '/F', '/PID', str(pid)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def swap_in_new_exe(source_exe, dest_exe):
     """Copies source_exe over dest_exe (backup + copy-to-staging + atomic rename),
     even if dest_exe is the currently running executable — Windows allows
@@ -67,7 +84,7 @@ def swap_in_new_exe(source_exe, dest_exe):
     return backup_exe
 
 
-def perform_update(source_exe, dest_exe=None, timeout_seconds=10):
+def perform_update(source_exe, dest_exe=None, timeout_seconds=20):
     """Replaces dest_exe (default: the running exe) with source_exe and relaunches
     it, waiting for the startup marker to confirm the new version actually started.
 
@@ -113,7 +130,7 @@ def perform_update(source_exe, dest_exe=None, timeout_seconds=10):
         time.sleep(1)
         waited += 1
 
-    new_proc.kill()
+    kill_process_tree(new_proc.pid)
     os.replace(backup_exe, dest_exe)
     return False, "เวอร์ชันใหม่เปิดไม่สำเร็จ ระบบได้ย้อนกลับเป็นเวอร์ชันเดิมให้อัตโนมัติแล้ว"
 
@@ -447,6 +464,10 @@ def main():
                 dialog.destroy()
                 success, message = perform_update(exe_path)
                 if success:
+                    messagebox.showinfo(
+                        "Update",
+                        f"อัพเดทเป็นเวอร์ชัน {db_version} สำเร็จแล้ว\nโปรแกรมเวอร์ชันใหม่ได้เปิดขึ้นแล้ว"
+                    )
                     root.destroy()
                     os._exit(0)  # sys.exit() inside a Tk callback gets swallowed by Tkinter; force a real exit
                 else:
