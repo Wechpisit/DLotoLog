@@ -468,6 +468,13 @@ def main():
                     ['cmd', '/c', script_path],
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
                 )
+                # Give Windows time to fully detach the new console process before this
+                # process disappears — os._exit() right after Popen() was killing the
+                # freshly-spawned batch script's DLL loading mid-init (confirmed by
+                # testing: the same exe always opened fine via a normal double-click,
+                # only failed when launched by "start" immediately followed by this
+                # process exiting).
+                time.sleep(0.5)
 
                 dialog.destroy()
                 root.destroy()
