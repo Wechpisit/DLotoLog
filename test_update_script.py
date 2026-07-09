@@ -53,18 +53,37 @@ def test_get_update_exe_path_returns_value_when_set():
 def test_build_update_script_contains_all_paths():
     script = dloto.build_update_script(
         pid=1234,
-        source_exe="L:/update/D-Loto.exe",
-        dest_exe="C:/apps/D-Loto.exe",
-        marker_file="C:/temp/dloto_started.flag",
+        source_exe=r"L:\update\D-Loto.exe",
+        dest_exe=r"C:\apps\D-Loto.exe",
+        marker_file=r"C:\temp\dloto_started.flag",
         timeout_seconds=10,
     )
     assert "1234" in script
-    assert '"L:/update/D-Loto.exe"' in script
-    assert '"C:/apps/D-Loto.exe"' in script
-    assert '"C:/apps/D-Loto.exe.bak"' in script
-    assert '"C:/temp/dloto_started.flag"' in script
+    assert r'"L:\update\D-Loto.exe"' in script
+    assert r'"C:\apps\D-Loto.exe"' in script
+    assert r'"C:\apps\D-Loto.exe.bak"' in script
+    assert r'"C:\temp\dloto_started.flag"' in script
     assert "%WAITED% GEQ 10" in script
     assert "D-Loto.exe" in script  # exe_name used in taskkill
+
+
+def test_build_update_script_normalizes_forward_slashes():
+    """Regression test: cmd.exe's copy/move silently fail to find forward-slash
+    paths (e.g. paths stored in the DB as "C:/foo/bar.exe") even though the file
+    exists — confirmed by manually running `copy /y "C:/dtest/.../source" "C:/dtest/.../dest"`,
+    which printed "The system cannot find the file specified." while the
+    identical command with backslashes succeeded. build_update_script must
+    always normalize to backslashes.
+    """
+    script = dloto.build_update_script(
+        pid=1234,
+        source_exe="C:/dtest/update/D-Loto_new.exe",
+        dest_exe="C:/dtest/D-Loto.exe",
+        marker_file="C:/temp/dloto_started.flag",
+    )
+    assert "C:/dtest" not in script  # the forward-slash form must not survive into the script
+    assert r'"C:\dtest\update\D-Loto_new.exe"' in script
+    assert r'"C:\dtest\D-Loto.exe"' in script
 
 
 def test_write_update_script_creates_file():
@@ -88,5 +107,6 @@ if __name__ == "__main__":
     test_get_update_exe_path_returns_none_when_missing()
     test_get_update_exe_path_returns_value_when_set()
     test_build_update_script_contains_all_paths()
+    test_build_update_script_normalizes_forward_slashes()
     test_write_update_script_creates_file()
     print("All tests passed.")

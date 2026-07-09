@@ -85,7 +85,15 @@ if exist "{marker}" del /f /q "{marker}"
 
 
 def build_update_script(pid, source_exe, dest_exe, marker_file, timeout_seconds=10):
-    """Pure function: renders the batch script text. No file I/O — easy to unit test."""
+    """Pure function: renders the batch script text. No file I/O — easy to unit test.
+
+    cmd.exe's `copy`/`move` silently fail to find forward-slash paths (e.g. paths
+    read from the DB as "C:/foo/bar.exe") even though the file exists — always
+    normalize to backslashes before rendering into the script.
+    """
+    source_exe = os.path.normpath(source_exe)
+    dest_exe = os.path.normpath(dest_exe)
+    marker_file = os.path.normpath(marker_file)
     backup_exe = dest_exe + ".bak"
     exe_name = os.path.basename(dest_exe)
     return UPDATE_SCRIPT_TEMPLATE.format(
