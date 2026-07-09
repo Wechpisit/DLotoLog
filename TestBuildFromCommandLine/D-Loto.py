@@ -25,7 +25,7 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 
 # --- Auto-update helpers (module-level: no closure state needed, and this
-# is what makes them testable in isolation — see test_update_script.py) ---
+# is what makes them testable in isolation — see test_auto_update.py) ---
 
 def get_marker_file_path():
     """Fixed path both the old and new .exe write to/watch, so a relaunch can detect success."""
@@ -45,104 +45,77 @@ def get_update_exe_path(cursor):
     return result[0] if result else None
 
 
-UPDATE_SCRIPT_TEMPLATE = """@echo off
-chcp 65001 >nul
-title D-LOTO Update
-setlocal
+def swap_in_new_exe(source_exe, dest_exe):
+    """Copies source_exe over dest_exe (backup + copy-to-staging + atomic rename),
+    even if dest_exe is the currently running executable — Windows allows
+    renaming an open/running file, just not deleting or overwriting its content
+    in place (confirmed by testing: renaming a live, running .exe succeeds and
+    the process keeps running normally afterward).
 
-echo กำลังอัพเดทโปรแกรม D-LOTO
-echo กรุณารอสักครู่ อย่าปิดหน้าต่างนี้...
-echo.
-
-:WAITLOOP
-tasklist /FI "PID eq {pid}" 2>NUL | findstr /I "{pid}" >NUL
-if not errorlevel 1 (
-    timeout /t 1 /nobreak >nul
-    goto WAITLOOP
-)
-
-echo กำลังติดตั้งเวอร์ชันใหม่...
-if exist "{marker}" del /f /q "{marker}"
-if exist "{backup}" del /f /q "{backup}"
-if exist "{staging}" del /f /q "{staging}"
-move /y "{dest}" "{backup}"
-copy /y "{source}" "{staging}"
-ren "{staging}" "{exe_name}"
-
-echo กำลังตรวจสอบว่าคัดลอกไฟล์สำเร็จหรือไม่...
-if not exist "{dest}" goto ROLLBACK
-
-start "" "{dest}"
-
-echo กำลังตรวจสอบว่าโปรแกรมเปิดสำเร็จหรือไม่...
-set WAITED=0
-:CHECKLOOP
-if exist "{marker}" goto SUCCESS
-timeout /t 1 /nobreak >nul
-set /a WAITED+=1
-if %WAITED% GEQ {timeout_seconds} goto ROLLBACK
-goto CHECKLOOP
-
-:SUCCESS
-echo อัพเดทสำเร็จ! หน้าต่างนี้จะปิดเองในอีกสักครู่
-del /f /q "{backup}" >nul 2>nul
-timeout /t 2 /nobreak >nul
-goto CLEANUP
-
-:ROLLBACK
-echo อัพเดทไม่สำเร็จ กำลังย้อนกลับไปใช้เวอร์ชันเดิม...
-taskkill /F /IM "{exe_name}" >nul 2>nul
-move /y "{backup}" "{dest}"
-start "" "{dest}"
-echo ย้อนกลับสำเร็จ หน้าต่างนี้จะปิดเองในอีกสักครู่
-timeout /t 2 /nobreak >nul
-
-:CLEANUP
-if exist "{marker}" del /f /q "{marker}"
-(goto) 2>nul & del "%~f0"
-"""
-
-
-def build_update_script(pid, source_exe, dest_exe, marker_file, timeout_seconds=10):
-    """Pure function: renders the batch script text. No file I/O — easy to unit test.
-
-    cmd.exe's `copy`/`move` silently fail to find forward-slash paths (e.g. paths
-    read from the DB as "C:/foo/bar.exe") even though the file exists — always
-    normalize to backslashes before rendering into the script.
-
-    Copies to a staging name first, then renames into place (atomic on the same
-    volume) instead of copying directly onto the final name — a straight copy
-    onto the live filename was intermittently followed by "Failed to load Python
-    DLL" when the new exe was launched immediately after, even though the same
-    file always opened fine via a normal double-click.
+    Returns the backup path. Raises OSError if anything fails; if the initial
+    copy fails, dest_exe is left completely untouched.
     """
-    source_exe = os.path.normpath(source_exe)
-    dest_exe = os.path.normpath(dest_exe)
-    marker_file = os.path.normpath(marker_file)
     backup_exe = dest_exe + ".bak"
     staging_exe = dest_exe + ".new"
-    exe_name = os.path.basename(dest_exe)
-    return UPDATE_SCRIPT_TEMPLATE.format(
-        pid=pid,
-        source=source_exe,
-        dest=dest_exe,
-        backup=backup_exe,
-        staging=staging_exe,
-        marker=marker_file,
-        timeout_seconds=timeout_seconds,
-        exe_name=exe_name,
-    )
+    if os.path.exists(staging_exe):
+        os.remove(staging_exe)
+    if os.path.exists(backup_exe):
+        os.remove(backup_exe)
+    shutil.copy2(source_exe, staging_exe)  # dest_exe untouched if this raises
+    os.rename(dest_exe, backup_exe)
+    os.rename(staging_exe, dest_exe)
+    return backup_exe
 
 
-def write_update_script(pid, source_exe, dest_exe, marker_file, timeout_seconds=10):
-    """Writes the rendered script to %TEMP%\\dloto_update.bat and returns its path."""
-    script_text = build_update_script(pid, source_exe, dest_exe, marker_file, timeout_seconds)
-    script_path = os.path.join(tempfile.gettempdir(), "dloto_update.bat")
-    # utf-8-sig: the batch script's `chcp 65001` switch expects a UTF-8 BOM to render
-    # the Thai status text correctly instead of garbled characters
-    with open(script_path, "w", encoding="utf-8-sig") as f:
-        f.write(script_text)
-    return script_path
+def perform_update(source_exe, dest_exe=None, timeout_seconds=10):
+    """Replaces dest_exe (default: the running exe) with source_exe and relaunches
+    it, waiting for the startup marker to confirm the new version actually started.
+
+    Runs entirely in this process via subprocess.Popen — no external helper
+    script needed. An earlier version of this used a batch script + `start` to
+    launch the new exe, which intermittently crashed with "Failed to load Python
+    DLL" — extensive isolation testing (see docs/superpowers/plans/2026-07-10-
+    auto-update-relaunch.md and its follow-up commits) showed that failure only
+    ever happened through that batch/cmd/start chain, never through a plain
+    double-click or a direct subprocess.Popen call, so this version avoids
+    cmd.exe entirely.
+
+    Returns (success, message). On success the caller should exit — the new
+    process is already running. On failure, the original exe has already been
+    restored and is still running (it never stopped), so the caller must NOT
+    exit or destroy its window.
+    """
+    dest_exe = dest_exe or sys.executable
+    marker_file = get_marker_file_path()
+    if os.path.exists(marker_file):
+        os.remove(marker_file)
+
+    try:
+        backup_exe = swap_in_new_exe(source_exe, dest_exe)
+    except OSError as e:
+        return False, f"ไม่สามารถติดตั้งไฟล์ใหม่ได้: {e}"
+
+    try:
+        new_proc = subprocess.Popen([dest_exe])
+    except OSError as e:
+        # os.replace(), not os.rename(): dest_exe already exists at this point
+        # (swap_in_new_exe already put the new file there) — plain os.rename()
+        # raises FileExistsError on Windows when the destination exists.
+        os.replace(backup_exe, dest_exe)
+        return False, f"เปิดเวอร์ชันใหม่ไม่สำเร็จ: {e}"
+
+    waited = 0
+    while waited < timeout_seconds:
+        if os.path.exists(marker_file):
+            os.remove(marker_file)
+            os.remove(backup_exe)
+            return True, "อัพเดทสำเร็จ"
+        time.sleep(1)
+        waited += 1
+
+    new_proc.kill()
+    os.replace(backup_exe, dest_exe)
+    return False, "เวอร์ชันใหม่เปิดไม่สำเร็จ ระบบได้ย้อนกลับเป็นเวอร์ชันเดิมให้อัตโนมัติแล้ว"
 
 
 def main():
@@ -471,27 +444,15 @@ def main():
                     dialog.destroy()
                     return
 
-                dest_exe = sys.executable
-                marker_file = get_marker_file_path()
-                if os.path.exists(marker_file):
-                    os.remove(marker_file)
-
-                script_path = write_update_script(os.getpid(), exe_path, dest_exe, marker_file)
-                subprocess.Popen(
-                    ['cmd', '/c', script_path],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                )
-                # Give Windows time to fully detach the new console process before this
-                # process disappears — os._exit() right after Popen() was killing the
-                # freshly-spawned batch script's DLL loading mid-init (confirmed by
-                # testing: the same exe always opened fine via a normal double-click,
-                # only failed when launched by "start" immediately followed by this
-                # process exiting).
-                time.sleep(0.5)
-
                 dialog.destroy()
-                root.destroy()
-                os._exit(0)  # sys.exit() inside a Tk callback gets swallowed by Tkinter; force a real exit
+                success, message = perform_update(exe_path)
+                if success:
+                    root.destroy()
+                    os._exit(0)  # sys.exit() inside a Tk callback gets swallowed by Tkinter; force a real exit
+                else:
+                    # perform_update() already restored the original exe on failure —
+                    # this process never stopped, so keep running, don't exit.
+                    messagebox.showerror("Update Failed", message)
 
             def on_close():
                 dialog.destroy()
