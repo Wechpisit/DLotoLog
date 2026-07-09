@@ -414,11 +414,38 @@ def main():
             button_frame.pack(pady=(0, int(15*scaling_factor)))
 
             def on_update():
-                # TODO (Step 2): copy new exe from update folder and relaunch automatically
-                messagebox.showinfo(
-                    "Update",
-                    "ฟีเจอร์อัพเดทอัตโนมัติจะถูกเพิ่มในขั้นตอนถัดไป\nโปรแกรมจะปิดตัวลงตอนนี้"
+                if not getattr(sys, 'frozen', False):
+                    messagebox.showinfo(
+                        "Update",
+                        "ฟีเจอร์อัพเดทอัตโนมัติใช้ได้เฉพาะเมื่อรันจากโปรแกรม .exe เท่านั้น\n"
+                        "โปรแกรมจะปิดตัวลงตอนนี้"
+                    )
+                    dialog.destroy()
+                    root.destroy()
+                    sys.exit()
+                    return
+
+                exe_path = get_update_exe_path(c)
+                if not exe_path or not os.path.exists(exe_path):
+                    messagebox.showerror(
+                        "Update Failed",
+                        f"ไม่พบไฟล์อัพเดทที่ {exe_path or '(ยังไม่ได้ตั้งค่า exe_path ใน app_info)'}\n"
+                        f"กรุณาติดต่อผู้ดูแลระบบ"
+                    )
+                    dialog.destroy()
+                    return
+
+                dest_exe = sys.executable
+                marker_file = get_marker_file_path()
+                if os.path.exists(marker_file):
+                    os.remove(marker_file)
+
+                script_path = write_update_script(os.getpid(), exe_path, dest_exe, marker_file)
+                subprocess.Popen(
+                    ['cmd', '/c', script_path],
+                    creationflags=subprocess.CREATE_NO_WINDOW,
                 )
+
                 dialog.destroy()
                 root.destroy()
                 sys.exit()
