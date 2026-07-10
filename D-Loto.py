@@ -99,6 +99,57 @@ def cleanup_stale_backup(exe_path=None):
         pass  # no leftover backup, or the old process is somehow still exiting
 
 
+# --- Dropdown list helpers (module-level: testable — see test_dropdown_lists.py.
+# Table DDL here must stay in sync with migrate_dropdown_lists.py's
+# create_dropdown_tables()) ---
+
+def load_dropdown_lists(cursor):
+    """Reads all 7 dropdown lists from the DB, creating the backing tables
+    first if they don't exist yet (so a DB that hasn't been migrated yet
+    doesn't crash the app — see migrate_dropdown_lists.py for the one-time
+    seed from the old hardcoded lists)."""
+    cursor.execute("""CREATE TABLE IF NOT EXISTS employees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        email TEXT,
+        is_sectionmgr INTEGER NOT NULL DEFAULT 0,
+        is_lomember INTEGER NOT NULL DEFAULT 0,
+        active INTEGER NOT NULL DEFAULT 1
+    )""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS dropdown_options (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        list_name TEXT NOT NULL,
+        value TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1,
+        UNIQUE(list_name, value)
+    )""")
+
+    cursor.execute("SELECT name FROM employees WHERE active = 1")
+    owner_list = [row[0] for row in cursor.fetchall()]
+
+    cursor.execute("SELECT name FROM employees WHERE active = 1 AND is_sectionmgr = 1")
+    sectionmgr_list = [row[0] for row in cursor.fetchall()]
+
+    cursor.execute("SELECT name FROM employees WHERE active = 1 AND is_lomember = 1")
+    lomember_list = [row[0] for row in cursor.fetchall()]
+
+    cursor.execute("SELECT name, email FROM employees WHERE email IS NOT NULL")
+    email_list = {row[0]: row[1] for row in cursor.fetchall()}
+
+    def _dropdown_values(list_name):
+        cursor.execute(
+            "SELECT value FROM dropdown_options WHERE list_name = ? AND active = 1",
+            (list_name,),
+        )
+        return [row[0] for row in cursor.fetchall()]
+
+    incharge_list = _dropdown_values('incharge')
+    area_list = _dropdown_values('area')
+    machine_list = _dropdown_values('machine')
+
+    return incharge_list, owner_list, sectionmgr_list, lomember_list, area_list, machine_list, email_list
+
+
 def perform_update(source_exe, dest_exe=None, timeout_seconds=20):
     """Replaces dest_exe (default: the running exe) with source_exe and relaunches
     it, waiting for the startup marker to confirm the new version actually started.
