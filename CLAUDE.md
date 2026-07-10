@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Collaboration Rules
 
 - **Always use `AskUserQuestion` tool when any requirement is unclear before implementing.** Do not assume or proceed with guesses. Confirm first, implement after.
+- **Manual-invocation-only skills**: several skills listed below (all `mattpocock/skills` additions — `grill-me`, `grill-with-docs`, `handoff`, `claude-handoff`, `wayfinder`, `to-tickets`, `triage`) ship with `disable-model-invocation: true`, meaning Claude cannot auto-trigger them — only the user can, via `/skill-name`. **Whenever Claude judges one of these applies to the current task, it must explicitly tell the user which skill and why (e.g. "this is a high-risk change — please run `/grill-me` before I implement it"), instead of silently skipping the step or working around it.** Do not proceed past that point until the user invokes it or explicitly declines.
 
 ## Agent skills
 
@@ -26,8 +27,8 @@ Skills available depend on the user's installed Claude Code plugins and may chan
 
 **Before any feature/design work (mandatory per `superpowers:using-superpowers`)**:
 - `superpowers:brainstorming` — before creating features, adding functionality, or changing behavior (e.g. designing the auto-update dialog). Explores intent/requirements before implementation.
-- `grill-me` — for **high-risk, hard-to-reverse changes** (e.g. Step 2 auto-update: overwriting the running .exe, process relaunch logic). Interviews until the design is fully resolved. Use before implementing, not after.
-- `grill-with-docs` — same as `grill-me` but also keeps CONTEXT.md/ADRs in sync as decisions are made. Prefer this over `grill-me` once this repo has docs like that to update.
+- `grill-me` **(manual invocation only — tell the user to run `/grill-me`)** — for **high-risk, hard-to-reverse changes** (e.g. Step 2 auto-update: overwriting the running .exe, process relaunch logic). Interviews until the design is fully resolved. Use before implementing, not after.
+- `grill-with-docs` **(manual invocation only — tell the user to run `/grill-with-docs`)** — same as `grill-me` but also keeps CONTEXT.md/ADRs in sync as decisions are made (this repo now has `docs/agents/domain.md` + `docs/adr/` — see Domain docs above). Prefer this over `grill-me` now that those docs exist.
 - For low-risk/additive UI tweaks (e.g. popup wording, button layout), a quick `AskUserQuestion` is enough — no need for `grill-me`.
 
 **Debugging (mandatory before proposing any fix)**:
@@ -57,7 +58,16 @@ Skills available depend on the user's installed Claude Code plugins and may chan
 **Documentation**:
 - `init` — only if CLAUDE.md needs a full regeneration from scratch (not for incremental updates — those are done directly).
 
-**Not typically relevant to this repo** (Windows desktop Tkinter app, no web/cloud/CI): `claude-in-chrome`, `dataviz`, `to-issues`, `to-prd`, `triage`, `schedule`, `loop`, `claude-api` (unless the app ever integrates an LLM), `fewer-permission-prompts`, `keybindings-help`, `update-config`.
+**Issue tracker workflow** (this repo tracks issues on `Wechpisit/DLotoLog` — see Issue tracker / Triage labels above):
+- `to-tickets` **(manual invocation only — tell the user to run `/to-tickets`)** — breaks a plan/spec/conversation into tracer-bullet tickets with blocking edges, published to `Wechpisit/DLotoLog`. Use once a plan is agreed and ready to be filed as issues, instead of hand-writing `gh issue create` calls.
+- `triage` **(manual invocation only — tell the user to run `/triage`)** — moves an issue/external PR through categorise → verify → grill → agent-ready-brief, applying the label vocabulary in `docs/agents/triage-labels.md`. Use when asked to triage the backlog.
+- `wayfinder` **(manual invocation only — tell the user to run `/wayfinder`)** — for work too large for one session: maps it as investigation tickets on the issue tracker and resolves them one at a time. Use for large, multi-session initiatives (e.g. a full production auto-update rollout), not single-branch features — `superpowers:writing-plans`/`executing-plans` is still the right tool for those.
+
+**Session continuity**:
+- `handoff` **(manual invocation only — tell the user to run `/handoff`)** — compacts the current conversation into a handoff doc for the next session to pick up. This repo already uses this pattern (see `dloto-handoff-*.md` files) — prefer invoking the actual skill over writing an ad hoc handoff doc by hand.
+- `claude-handoff` **(manual invocation only — tell the user to run `/claude-handoff`)** — same idea, but hands the work directly to a background agent instead of just writing a doc. Only relevant if the user wants work to continue unattended.
+
+**Not typically relevant to this repo** (Windows desktop Tkinter app, no web/cloud/CI): `claude-in-chrome`, `dataviz`, `to-issues`, `to-prd`, `schedule`, `loop`, `claude-api` (unless the app ever integrates an LLM), `fewer-permission-prompts`, `keybindings-help`, `update-config`. Also not relevant: the `mattpocock/skills` writing pipeline (`writing-fragments`, `writing-beats`, `writing-shape`, `edit-article`, `writing-great-skills`) and misc skills (`ask-matt`, `teach`, `wizard`, `implement`, `improve-codebase-architecture`, `to-spec`, `ubiquitous-language`, `setup-matt-pocock-skills` — already run once, see Agent skills above) — general-purpose but nothing here currently needs them.
 
 ## Project Overview
 
