@@ -2,7 +2,9 @@ import importlib.util
 import os
 import shutil
 import sqlite3
+import subprocess
 import tempfile
+import threading
 
 
 def _load_dloto_module():
@@ -127,6 +129,72 @@ def test_perform_update_rolls_back_when_new_exe_never_signals_success():
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def test_perform_update_succeeds_even_when_backup_is_a_running_exe():
+    """Regression test for the real-world success path. In production, the
+    backup file (dest.bak) IS the currently running old exe — Windows allows
+    renaming a running executable's file but locks it against deletion, so
+    the old success path's os.remove(backup) raised PermissionError, which
+    Tkinter swallowed: no success popup, old process never exited, and its
+    main window reappeared alongside the new version.
+
+    Simulated here by launching dest as a live process before updating (same
+    lock semantics as the running app), and writing the startup marker from a
+    background thread mid-wait (as the freshly launched new version would).
+    perform_update must report success; a leftover .bak is acceptable (cleaned
+    up by cleanup_stale_backup on a later startup).
+    """
+    tmp_dir = tempfile.mkdtemp(prefix="dloto_perform_update_test_")
+    running_old = None
+    try:
+        source = os.path.join(tmp_dir, "new_app.exe")
+        dest = os.path.join(tmp_dir, "dloto_locktest_app.exe")
+        shutil.copy2(r"C:\Windows\System32\cmd.exe", source)
+        shutil.copy2(r"C:\Windows\System32\cmd.exe", dest)
+
+        # The old version is running from dest — its image file is now
+        # rename-able but not deletable, exactly like the real running app.
+        # stdin must be an open pipe (not DEVNULL): cmd.exe exits immediately
+        # on EOF, which would silently release the file lock.
+        running_old = subprocess.Popen([dest], stdin=subprocess.PIPE,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                       creationflags=subprocess.CREATE_NO_WINDOW)
+
+        marker = dloto.get_marker_file_path()
+        if os.path.exists(marker):
+            os.remove(marker)
+        threading.Timer(1.0, dloto.mark_startup_success).start()
+
+        success, message = dloto.perform_update(source, dest_exe=dest, timeout_seconds=10)
+
+        assert success is True, f"expected success, got failure: {message}"
+        assert os.path.exists(dest)
+        assert not os.path.exists(marker)  # consumed by the success path
+    finally:
+        if running_old is not None:
+            running_old.kill()
+            running_old.wait()
+        # perform_update's own Popen spawned a second copy of the dest exe;
+        # its unique image name keeps this from touching anything else.
+        subprocess.run(['taskkill', '/F', '/IM', 'dloto_locktest_app.exe'],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def test_cleanup_stale_backup_removes_leftover_bak():
+    tmp_dir = tempfile.mkdtemp(prefix="dloto_cleanup_test_")
+    try:
+        exe = os.path.join(tmp_dir, "app.exe")
+        with open(exe + ".bak", "wb") as f:
+            f.write(b"OLD VERSION BYTES")
+
+        dloto.cleanup_stale_backup(exe)
+        assert not os.path.exists(exe + ".bak")
+
+        dloto.cleanup_stale_backup(exe)  # no .bak present: must not raise
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_marker_file_path_is_stable()
     test_mark_startup_success_writes_marker()
@@ -135,4 +203,6 @@ if __name__ == "__main__":
     test_swap_in_new_exe_replaces_content_and_returns_backup()
     test_swap_in_new_exe_leaves_dest_untouched_if_copy_fails()
     test_perform_update_rolls_back_when_new_exe_never_signals_success()
+    test_perform_update_succeeds_even_when_backup_is_a_running_exe()
+    test_cleanup_stale_backup_removes_leftover_bak()
     print("All tests passed.")

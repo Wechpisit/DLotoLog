@@ -84,6 +84,21 @@ def swap_in_new_exe(source_exe, dest_exe):
     return backup_exe
 
 
+def cleanup_stale_backup(exe_path=None):
+    """Deletes the .bak left behind by a previous successful update.
+
+    perform_update() can't delete the backup itself: on success the backup is
+    the old, still-running exe's own image file, which Windows locks against
+    deletion until that process exits. By the time the updated app starts up
+    again, the old process is long gone and the delete succeeds.
+    """
+    exe_path = exe_path or sys.executable
+    try:
+        os.remove(exe_path + ".bak")
+    except OSError:
+        pass  # no leftover backup, or the old process is somehow still exiting
+
+
 def perform_update(source_exe, dest_exe=None, timeout_seconds=20):
     """Replaces dest_exe (default: the running exe) with source_exe and relaunches
     it, waiting for the startup marker to confirm the new version actually started.
@@ -135,7 +150,16 @@ def perform_update(source_exe, dest_exe=None, timeout_seconds=20):
     while waited < timeout_seconds:
         if os.path.exists(marker_file):
             os.remove(marker_file)
-            os.remove(backup_exe)
+            try:
+                os.remove(backup_exe)
+            except OSError:
+                # backup_exe IS this process's own running executable (renamed):
+                # Windows allows renaming a running exe's file but locks it
+                # against deletion until the process exits, so this remove
+                # always fails in real use. Leave the .bak behind — the next
+                # startup deletes it via cleanup_stale_backup(), once this
+                # process is gone and the lock released.
+                pass
             return True, "อัพเดทสำเร็จ"
         time.sleep(1)
         waited += 1
@@ -146,6 +170,8 @@ def perform_update(source_exe, dest_exe=None, timeout_seconds=20):
 
 
 def main():
+    cleanup_stale_backup()  # remove the .bak a previous update left behind (see perform_update)
+
     # Setup rev of program
     rev = '1.0.3'
 
