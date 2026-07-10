@@ -702,114 +702,30 @@ def main():
     def show_message(title, message):
         messagebox.showinfo(title, message)
 
-    # Create list for Dropdown
-    def list_setup():
-        incharge_list = ['MT.Mech','MT.Ins','MT.Elec','ED.Mech','ED.Ins','ED.Elec',
-                    'ED.Process','Project','LO.','ED.','PI',]
+    # Load dropdown lists from DB (module-level load_dropdown_lists() —
+    # see migrate_dropdown_lists.py for the one-time seed from the old
+    # hardcoded lists, and test_dropdown_lists.py for its tests)
+    incharge_list, owner_list, sectionmgr_list, lomember_list, area_list, machine_list, email_list = ([], [], [], [], [], [], {})
 
-        owner_list = ['Jutharat.P','Chanida.H','Pajaree.L','Kittipong.V','Amporn.T',
-                'Somchai.R','Witawit.P','Phaksunee.In','Chanchai.S','Jedsada.M',
-                'Chalermpon.K','Siriwan.K','Dan.S','Pimjai.I','Gunthon.U','Wirasak.B',
-                'Panuphot.P','Nugul.J','Parinya.Y','Seksan.S','Kritsakon.P','Jakkrit.C',
-                'Nattagorn.R','Preeyaporn.S','Taipob.K','Sarawut.S','Yutasart.P','Sarayut.K',
-                'Nopparat.J','Wisud.D','Dhosapol.S','Natthakorn.S','Kittituch.L','Tanisorn.S',
-                'Piyapong.P','Weerayut.P','Rapeepan.W','Phissara.W','Issarush.K','Phaopan.T',
-                'Teerayut.S','Rungroj.S','Narunard.H','Boonlert.S','Chatdanai.B','Maytungkorn.S',
-                'Rachanon.Y','Artit.K','Anusorn.N','Nutrada.S','Pornthep.D','Pornthep.L',
-                'Dumrongsak.J','Wanchai.J','Maythika.S','Wachirasak.L','Sirapong.W','Wisit.O',
-                'Warin.I','Chomphoonuch.W','Kitipoom.T','Mongkol.S','Phuekpon.S','Kittipong.P',
-                'Kittisak.T','Noppanan.T','Rattikool.P','Narupon.K','Ukrit.C','Teerasak.S',
-                'Wimmalak.R','Isarah.P','Rinrada.K','Sakda.P','Amaris.U','Kittiwat.R','Visarn.K',
-                'Kosin.S','Ronnaporn.K','Krit.Y','Wiwid.B','Weerachon.S','Hirun.U','Kanate.Th',
-                'Ratchapon.P','Thanongsak.K','Eakkarin.B','Kittiwat.Ro','Weerawat.N','Korakot.C',
-                'Suphamit.K','Tharadon.J','Naret.N','Chidsanupong.V','Suttipat.V','Sasiwan.M',
-                'Worapon.P','Mutitaporn.P','Nattanich.B','Thanaphorn.T','Puttiporn.J','Piyanut.M',
-                'Witthawat.K','Siriwit.P','Piyachai.M','Jantakan.P','Siwakan.K','Nuttanan.P',
-                'Teepakorn.R','Thanaporn.S','Nadthanakorn.K','Thatsapong.S','Chintara.R','Tanchanok.W',
-                'Siriphop.J','Sukritta.J','Chalermchat.C','Worapong.S','Yolada.O','Pakin.A',
-                'Panyawat.L','Nateetorn.A','Jirayu.J','Kornpong.V','Tanawat.T','Nasrada.S','Mintra.M',
-                'Nattakorn.B','Suphachai.C','Phuradech.M','Kamonchanok.J','Kriangkrai.A','Natthawut.C',
-                'Pitchayut.P','Vichaiprat.S','Wechpisit.S','Palathip.S','Jirapon.P','Pacharapol.J',
-                'Surasak.D','Trin.J','Sanya.R','Naruepol.L','Puttachat.T','Narisara.P','Sarit.J',
-                'Kodchakorn.W','Sirawit.S','Saransak.N','Natnicha.L','Thut.B','Peeranut.N','Soravit.C',
-                'Koragoch.T','Sukrit.I','Theerawit.J','Saranya.W','Napak.W','Warunyoo.W','Karan.B',
-                'Papawich.P','Prolamath.P','Natchaiyot.W','Kridsakorn.S','Pornphun.C','Khathawut.B',
-                'Thapanee.M','Nara.T','Chanitpak.A','Dhana.P','Tritep.O','Suphachot.P','Arnonnat.C',
-                'Natchapol.H','Jakkrit.S','Wuttipat.W','Khemmachat.P','Tossapol.K','Suwicha.N',
-                'Alongkorn.K','Amorntep.S','Boonchoo.J','Kiangkai.C','Supanat.T','Narudech.S',
-                'Thanasak.S','Weerapong.L','Peeranut.S','Jetsadakorn.B','Siravit.C','Poramane.C',
-                'Natcharikan.P','Nopphakao.C','Ativit.P','Phichate.N','Thonthan.J','Raviwat.T',
-                'Phanuwat.J','Sudaphorn.Y','Supachai.Y','Anurak.S','Danuwat.B','Phuangpayom.S',
-                'Surachai.U','Chayathorn.C','Warayus.S','Siripop.P','Thanayod.W','Nawi.T',
-                'Thanatchaporn.K','Sarawut.Bo','Jenjira.R','Sittichok.C','Komtanut.C','Raiwin.N',
-                'Ratatummanoon.S','Thitithanu.B','Chinnakrit.M','Thanadon.T','Nutchana.N','Veeraphat.K',
-                'Chatchaiwat.R','Nawin.S','Wichanath.P','Thitapa.C','Warut.T']
-
-        sectionmgr_list = ['Yutasart.P','Kritsakon.P','Piyapong.P','Sarayut.K','Dumrongsak.J','Kittiwat.Ro',]
-
-        lomember_list = ['Parinya.Y','Kritsakon.P','Sarawut.S','Yutasart.P','Sarayut.K',
-                    'Tanisorn.S','Piyapong.P','Weerayut.P','Rachanon.Y','Artit.K',
-                    'Dumrongsak.J','Mongkol.S','Kittiwat.Ro','Weerawat.N','Naret.N',
-                    'Suttipat.V','Jantakan.P','Phuradech.M','Wechpisit.S','Palathip.S',
-                    'Koragoch.T','Saranya.W','Suphachot.P','Jakkrit.S','Wuttipat.W',
-                    'Boonchoo.J','Thanasak.S','Nopphakao.C','Thanayod.W','Sittichok.C',
-                    'Komtanut.C','Chinnakrit.M','Thanadon.T','Veeraphat.K','Nawin.S']
-
-        area_list = ['HP Pump','BOG Compressor','SOG Compressor','Recondenser','BOG Suction drum',
-                'Truck load','LNG Tank','Drain pump','ORV','IA / N2 ','Sanitary','NG Metering',
-                'Chlorination','Seawater pump','Seawater intake','Jetty Berth1','Jetty Berth2',
-                'Jetty Berth3','LNG Sampling','Firewater pump','ORC','GTG','WHRU','IFV',
-                'CWG Pump','CWG','IPG IA','IPG Metering','OSBL MAP Metering','OSBL GSP#7 Metering','Admin building','Canteen building','GIS I','GIS II',
-                'Fire station','Maintenance workshop','LAB','Warehouse','AIB Building',
-                'CCR Building','Main Substation','IPG Substation','JCR Building',
-                'Jetty Substation','Truck load admin','Truck load control room','Potable water',
-                'Service water','OSBL MAP','OSBL GSP7','MHX','Ground flare','New IA','ITCP','ITCP Metering']
-
-        machine_list = ['HP Pump A','HP Pump B','HP Pump C','HP Pump D','HP Pump E','HP Pump F','HP Pump G','HP Pump H','HP Pump I','HP Pump J','HP Pump K',
-                    'BOG Compressor A','BOG Compressor B','BOG Compressor C','BOG Compressor D','SOG Compressor A','SOG Compressor B',
-                    'Seawater pump A','Seawater pump B','Seawater pump C','Seawater pump D','Seawater pump E',
-                    'ORV A','ORV B','ORV C','ORV D','ORV E','ORV F','ORV G','ORV H','ORV I','ORV J',
-                    'Truck bay A','Truck bay B','Truck bay C','Truck bay D','Metering A','Metering B','Metering C','Metering D','Metering E',
-                    'Intank pump  1A','Intank pump  1B','Intank pump  1C','Intank pump  2A','Intank pump  2B','Intank pump  2C',
-                    'Intank pump  3A','Intank pump  3B','Intank pump  3C','Intank pump  4A','Intank pump  4B','Intank pump  4C',
-                    'LNG Tank 1','LNG Tank 2','LNG Tank 3','LNG Tank 4','IA Comp A','IA Comp B','IA Air dryer A','IA Air dryer B',
-                    'Drain pump','Electrolyzer A','Electrolyzer B','Booster pump A','Booster pump B','Dosing pump A','Dosing pump B',
-                    'Dosing pump C','Air Blower A','Air Blower B','IFV A','IFV B','Warm water pump A','Warm water pump B','Warm water pump C',
-                    'Warm water pump D','Warm water pump E','IPG water pump A','IPG water pump B','IPG water pump C','IPG water pump D',
-                    'IPG water pump E','HVAC water pump A','HVAC water pump B','HVAC water pump C','HVAC water pump D','HVAC water pump E',
-                    'GTG A','GTG B','WHRU A','WHRU B','ORC','ORC Seal oil system','ORC Lube oil system','CEMs','CYP Pump A','CYP Pump B',
-                    'IPG IA Comp A','IPG IA Comp B','IPG IA Air dryer A','IPG IA Air dryer B','Hot oil pump A','Hot oil pump B','WHRU-A Seal fan A',
-                    'WHRU-A Seal fan B','WHRU-B Seal fan A','WHRU-B Seal fan B','Truck bay A','Truck bay B','Truck bay C','Truck bay D',
-                    'Unloading arm','Jetty platform','MD','BD','Hydrualic oil pump','Fire truck','Deluge valve','Fire extinguisher',
-                    'B.1 MLA "A"','B.1 MLA "B"','B.1 MLA "C"','B.1 MLA "D"','B.2 MLA "E"',
-                    'B.2 MLA "F"','B.2 MLA "G"','B.2 MLA "H"','B.2 MLA "I"', 'DFBS A', 'DFBS B', 'DFBS C',
-                    'DFBS D', 'DFBS E', 'Wash water pump A', 'Wash water pump B', 'Wash water pump C', 'Service water pump A', 'Service water pump B',
-                    'Potable water pump A','Potable water pump B','Valve','MHX','New IA','Jockey pump A','Jockey pump B','Diesel fire water pump','Electrical firewater pump']
-
-        email_list = {'Parinya.Y': 'parinya.y@pttlng.com','Kritsakon.P': 'kritsakon.p@pttlng.com',
-                'Sarawut.S': 'sarawut.s@pttlng.com','Yutasart.P': 'yutasart.p@pttlng.com',
-                'Sarayut.K': 'sarayut.k@pttlng.com','Tanisorn.S': 'tanisorn.s@pttlng.com',
-                'Piyapong.P': 'piyapong.p@pttlng.com','Weerayut.P': 'weerayut.p@pttlng.com',
-                'Rachanon.Y': 'rachanon.y@pttlng.com','Artit.K': 'artit.k@pttlng.com',
-                'Dumrongsak.J': 'dumrongsak.j@pttlng.com','Mongkol.S': 'mongkol.s@pttlng.com',
-                'Kittiwat.Ro': 'kittiwat.ro@pttlng.com','Weerawat.N': 'weerawat.n@pttlng.com',
-                'Naret.N': 'naret.n@pttlng.com','Suttipat.V': 'suttipat.v@pttlng.com',
-                'Jantakan.P': 'jantakan.p@pttlng.com','Phuradech.M': 'phuradech.m@pttlng.com',
-                'Wechpisit.S': 'wechpisit.s@pttlng.com','Palathip.S': 'palathip.s@pttlng.com',
-                'Koragoch.T': 'koragoch.t@pttlng.com','Saranya.W': 'saranya.w@pttlng.com',
-                'Suphachot.P': 'suphachot.p@pttlng.com','Jakkrit.S': 'jakkrit.s@pttlng.com',
-                'Wuttipat.W': 'wuttipat.w@pttlng.com','Boonchoo.J': 'boonchoo.j@pttlng.com',
-                'Thanasak.S': 'Thanasak.s@pttlng.com','Nopphakao.C': 'Nopphakao.c@pttlng.com',
-                'Thanayod.W': 'thanayod.w@pttlng.com','Sittichok.C': 'sittichok.c@pttlng.com',
-                'Komtanut.C': 'komtanut.c@pttlng.com','Chinnakrit.M': 'chinnakrit.m@pttlng.com',
-                'Thanadon.T': 'thanadon.t@pttlng.com','Veeraphat.K': 'veeraphat.k@pttlng.com',
-                'Nawin.S': 'nawin.s@pttlng.com',}
-        
-        return incharge_list,owner_list,sectionmgr_list,lomember_list,area_list,machine_list, email_list
-    incharge_list, owner_list, sectionmgr_list, lomember_list, area_list, machine_list, email_list = list_setup()
+    def reload_dropdown_lists():
+        """Re-queries the DB and rebinds the dropdown list variables in place.
+        Called once at startup and again from refresh_treeview(). Safe to call
+        any time a popup is open: input_field_dropdown/_linebreak snapshot
+        sorted(options) at construction time (see their __init__), so this
+        never mutates a widget already on screen — only popups opened after
+        this call see the refreshed data."""
+        nonlocal incharge_list, owner_list, sectionmgr_list, lomember_list, area_list, machine_list, email_list
+        incharge_list, owner_list, sectionmgr_list, lomember_list, area_list, machine_list, email_list = load_dropdown_lists(c)
+        if not (incharge_list and owner_list and area_list and machine_list):
+            show_message(
+                "Warning",
+                "รายการตัวเลือกบางส่วนว่างเปล่า กรุณาตรวจสอบข้อมูลใน database (employees / dropdown_options)"
+            )
+    reload_dropdown_lists()
 
     # Fetch data from DB and Reset the table in GUI
     def refresh_treeview():
+        reload_dropdown_lists()
         print("Refreshing treeview")
         update_table_overview()
         update_table_pending()
