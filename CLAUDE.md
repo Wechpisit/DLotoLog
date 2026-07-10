@@ -33,6 +33,7 @@ Skills available depend on the user's installed Claude Code plugins and may chan
 **Debugging (mandatory before proposing any fix)**:
 - `superpowers:systematic-debugging` — any bug report, hang, crash, or unexpected behavior (used to find the `root.withdraw()`/`deiconify()` root cause). Do not guess-and-patch.
 - `diagnose` — alternative disciplined reproduce→fix loop, usable interchangeably with the above.
+- **Model escalation**: After more than 2 failed fix attempts on the same bug (3rd+ attempt still hasn't resolved it), stop and explicitly recommend to the user that they switch the active model to **Opus** or **Fable** for the rest of that debugging session via `/model`, instead of continuing to guess with the current model. This is a recommendation to surface, not something to decide or switch automatically — pair it with the `systematic-debugging` "3+ fixes failed → question the architecture" checkpoint rather than replacing it.
 
 **Implementation process**:
 - `superpowers:test-driven-development` / `tdd` — before writing implementation code for a feature or bugfix, when a test harness makes sense.
@@ -179,7 +180,7 @@ Three main SQLite tables with status-based workflow:
 
 ### Auto-Update Check
 
-- An `app_info` table stores a `version` key in the SQLite DB, seeded with the running app's `rev` on first launch (`INSERT OR IGNORE`). A second key, `exe_path`, holds the admin-set filesystem path to the new `.exe` (e.g. `L:/4.4LO.T1/___LOTO___/D-Loto.exe` in prod) — set manually via `UPDATE app_info SET value = '...' WHERE key = 'exe_path'` when rolling out a new build.
+- An `app_info` table stores a `version` key in the SQLite DB, seeded with the running app's `rev` on first launch (`INSERT OR IGNORE`). A second key, `exe_path`, holds the admin-set filesystem path to the new `.exe` — **not hardcoded anywhere in the code**, set manually via `UPDATE app_info SET value = '...' WHERE key = 'exe_path'` when rolling out a new build. The real production path hasn't been decided yet — see `DatabaseLocation/` for the pre-production reminder to set it.
 - On startup, `check_and_update()` compares the DB-stored version against the local `rev`, using `scaling_factor`/`ttk.Style`/`configure_button_styles()` set up right after `root = tk.Tk()` (moved earlier specifically so this dialog can use them — see `design-system.md`)
   - If the DB version is newer, shows a themed modal dialog (`#dcdad5` background, Tahoma font, `Custom2.TButton` buttons, `⚠️` icon — follows `design-system.md`) with two choices: **"อัพเดทเวอร์ชัน"** and **"ปิดโปรแกรม"** (closes immediately)
   - Clicking "อัพเดทเวอร์ชัน" calls `perform_update(exe_path)`, which does the whole swap+relaunch **in-process, in pure Python** — no batch script or `cmd.exe` involved (an earlier batch-script-based design intermittently crashed with "Failed to load Python DLL"; see `docs/lessons-learned/2026-07-10-auto-update-relaunch.md` for the full root-cause writeup):
@@ -188,7 +189,7 @@ Three main SQLite tables with status-based workflow:
     3. Waits up to 20s for the new process to write the startup marker file (`%TEMP%\dloto_started.flag`, written by `mark_startup_success()` once the new instance's main window is shown)
     4. **Success**: shows a confirmation popup, then `root.destroy()` + `os._exit(0)` (a plain `sys.exit()` inside a Tk callback gets swallowed by Tkinter). The `.bak` is **not** deleted here — it's still the exiting process's own locked image file — `cleanup_stale_backup()` deletes it on the *next* app startup instead, once the old process is gone.
     5. **Failure/timeout**: `kill_process_tree()` (`taskkill /T`, not `Popen.kill()` — a onefile build is actually two OS processes, bootloader + interpreter) kills the hung new process, `os.replace()` restores the `.bak`, and the original process keeps running untouched
-  - Update folder referenced in the dialog text: `update/` (dev) or `L:/4.4LO.T1/___LOTO___` (prod)
+  - The version-check dialog itself shows only version numbers (current design) — it doesn't display or reference any folder path
 - To roll out a new version: bump `rev`, update the `app_info.version` row in the shared DB, set/confirm `app_info.exe_path` points at the new build's location, and drop the new `.exe` there — existing clients will detect the mismatch and prompt users to update
 - Core functions are module-level (not nested in `main()`), so they're unit-testable in isolation — see `test_auto_update.py`
 - **Editing this logic**: only edit the root `D-Loto.py` — `TestBuildFromCommandLine/D-Loto.py` is synced from it automatically by `build.ps1` (see Build and Distribution above), don't hand-edit both copies
@@ -310,6 +311,7 @@ The application requires access to PTT LNG network drive (L:) or server 10.232.1
 - The DB path is chosen by the `ENV` switch (D-Loto.py:33), not directly from `config.json` — `config.json`'s `database_path` is loaded but then overwritten by the ENV-based `directory` (D-Loto.py:44-55)
 - **Before building for production**: set `ENV = 'prod'` in D-Loto.py:33, otherwise the exe will still point at the dev OneDrive path and skip the intranet check
 - Always verify `ENV` is correct before building the executable
+- **Before going live in production**: set `app_info.exe_path` in the production DB to the real network-drive location where the update `.exe` will be dropped — this has never been set for prod yet (only tested with local `C:\dtest` paths). See `DatabaseLocation/` for the reminder. Without it, `check_and_update()`'s "อัพเดทเวอร์ชัน" button will show "ไม่พบไฟล์อัพเดทที่ (ยังไม่ได้ตั้งค่า exe_path ใน app_info)" instead of updating.
 
 ### Monolithic Architecture
 - All application code is in a single `main()` function

@@ -1,0 +1,15 @@
+ก่อนขึ้น Production จริง ต้องตั้งค่า path สำหรับอัพเดทเวอร์ชันใน Database ก่อน!
+
+ตาราง app_info ใน loto_data.db (ตัว production ที่ L:\4.4LO.T1\06-Operational_and_Record\6.56 LOTO\loto_data.db)
+ต้องมี key ชื่อ exe_path ชี้ไปที่ path จริงบน network drive ที่จะวางไฟล์ D-Loto.exe เวอร์ชันใหม่ไว้
+ให้ผู้ใช้กด "อัพเดทเวอร์ชัน" แล้วโปรแกรมไปดึงมาเอง
+
+ตัวอย่างคำสั่ง SQL ที่ต้องรันบน DB จริง (ยังไม่เคยตั้งค่านี้สำหรับ production เลย เคยเทสต์แค่ path บนเครื่อง
+C:\dtest เท่านั้น):
+
+    UPDATE app_info SET value = 'L:/path/to/production/update/D-Loto.exe' WHERE key = 'exe_path';
+
+ถ้ายังไม่ตั้งค่านี้ ผู้ใช้กดปุ่ม "อัพเดทเวอร์ชัน" จะเจอ error:
+"ไม่พบไฟล์อัพเดทที่ (ยังไม่ได้ตั้งค่า exe_path ใน app_info)"
+
+ดูรายละเอียดกลไกอัพเดททั้งหมดได้ที่ CLAUDE.md หัวข้อ "Auto-Update Check"
