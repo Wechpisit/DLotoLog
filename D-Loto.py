@@ -3287,8 +3287,53 @@ def main():
         def get_text(self):
             """Returns the current text from the Text widget."""
             return self.text_widget.get('1.0', 'end-1c')
-        
-    ################################################# OVERVIEW TAB ################################################# 
+
+    # FUNCTION: Hover tooltip for a Treeview column whose text is natively
+    # truncated (ellipsis) because it doesn't fit the column width
+    def attach_truncation_tooltip(treeview, columns, tooltip_column_name, font):
+        tooltip_col_id = f"#{columns.index(tooltip_column_name) + 1}"
+        tooltip_state = {'win': None, 'row': None}
+
+        def hide_tooltip():
+            if tooltip_state['win'] is not None:
+                tooltip_state['win'].destroy()
+            tooltip_state['win'] = None
+            tooltip_state['row'] = None
+
+        def on_motion(event):
+            row_id = treeview.identify_row(event.y)
+            col_id = treeview.identify_column(event.x)
+            if not row_id or col_id != tooltip_col_id:
+                hide_tooltip()
+                return
+            col_index = int(col_id.replace('#', '')) - 1
+            values = treeview.item(row_id, 'values')
+            if col_index >= len(values):
+                hide_tooltip()
+                return
+            text = str(values[col_index])
+            column_width = treeview.column(tooltip_col_id, 'width')
+            if not is_text_truncated(text, font, column_width):
+                hide_tooltip()
+                return
+            if tooltip_state['win'] is not None and tooltip_state['row'] == row_id:
+                return  # already showing for this row
+            hide_tooltip()
+            win = tk.Toplevel(treeview)
+            win.wm_overrideredirect(True)
+            win.wm_geometry(f"+{event.x_root + 12}+{event.y_root + 12}")
+            tk.Label(win, text=text, background="#ffffe0", relief='solid', borderwidth=1,
+                     font=font, wraplength=400, justify='left').pack()
+            tooltip_state['win'] = win
+            tooltip_state['row'] = row_id
+
+        def on_leave(event):
+            hide_tooltip()
+
+        treeview.bind("<Motion>", on_motion, add="+")
+        treeview.bind("<Leave>", on_leave, add="+")
+
+    ################################################# OVERVIEW TAB #################################################
     # CREATE: the first tab (Overview) and add a frame to it
     overview_page = ttk.Frame(notebook)
     notebook.add(overview_page, text="Overview")
@@ -3729,6 +3774,8 @@ def main():
         loto_datalist.heading(h,text=h, command=lambda _col=h: treeview_sort_column(loto_datalist, _col, False))
         loto_datalist.column(h,width=w,anchor='center')
 
+    attach_truncation_tooltip(loto_datalist, header, 'Work Description', FONT3)
+
     # FUNCTION: Sort value by click at the Column header
     def treeview_sort_column(treeview, col, reverse):
         # Get data from the Treeview
@@ -3848,6 +3895,8 @@ def main():
         loto_datalist_p.heading(h,text=h, command=lambda _col=h: treeview_sort_column(loto_datalist_p, _col, False))
         loto_datalist_p.column(h,width=w,anchor='center')
 
+    attach_truncation_tooltip(loto_datalist_p, header_p, 'Work Description', FONT3)
+
     # FUNCTION: Sort value by click at the Column header
 
     # CREATE: COLUMN WIDTH DISABLE RESIZABLE
@@ -3937,6 +3986,8 @@ def main():
     for h,w in zip(header_c,headerw_c):
         loto_datalist_c.heading(h,text=h)
         loto_datalist_c.column(h,width=w,anchor='center')
+
+    attach_truncation_tooltip(loto_datalist_c, header_c, 'Work Description', FONT3)
 
     # CREATE: COLUMN WIDTH DISABLE RESIZABLE
     def disable_column_resize(event):
