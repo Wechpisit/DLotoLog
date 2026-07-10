@@ -21,7 +21,7 @@ ctypes.windll.shcore.SetProcessDpiAwareness(1)
 import sqlite3
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, letter
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from xml.sax.saxutils import escape as xml_escape
@@ -242,7 +242,7 @@ def capture_table_to_pdf(treeview, file_name):
         fontSize=10, leading=12, textColor=colors.whitesmoke, alignment=TA_CENTER,
     )
     cell_style = ParagraphStyle(
-        'LotoPdfCell', parent=styles['Normal'], fontSize=9, leading=11, alignment=TA_LEFT,
+        'LotoPdfCell', parent=styles['Normal'], fontSize=9, leading=11, alignment=TA_CENTER,
     )
 
     columns = treeview.cget("columns")
