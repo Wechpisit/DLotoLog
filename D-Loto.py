@@ -21,8 +21,10 @@ ctypes.windll.shcore.SetProcessDpiAwareness(1)
 import sqlite3
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from xml.sax.saxutils import escape as xml_escape
 
 # --- Auto-update helpers (module-level: no closure state needed, and this
 # is what makes them testable in isolation — see test_auto_update.py) ---
@@ -218,6 +220,68 @@ def perform_update(source_exe, dest_exe=None, timeout_seconds=20):
     kill_process_tree(new_proc.pid)
     os.replace(backup_exe, dest_exe)
     return False, "เวอร์ชันใหม่เปิดไม่สำเร็จ ระบบได้ย้อนกลับเป็นเวอร์ชันเดิมให้อัตโนมัติแล้ว"
+
+
+# --- PDF export (module-level: testable, no main() closure state needed —
+# see test_pdf_export.py) ---
+
+def capture_table_to_pdf(treeview, file_name):
+    """Exports a Treeview's rows to a PDF, wrapping long cell text instead of
+    letting it force the table wider than the printable page. Duck-typed on
+    `treeview` (cget/get_children/item/column) so it can be tested with a
+    fake object instead of a real Tkinter widget."""
+    pdf = SimpleDocTemplate(
+        file_name, pagesize=A4,
+        leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36,
+    )
+    elements = []
+
+    styles = getSampleStyleSheet()
+    header_style = ParagraphStyle(
+        'LotoPdfHeader', parent=styles['Normal'], fontName='Helvetica-Bold',
+        fontSize=10, leading=12, textColor=colors.whitesmoke, alignment=TA_CENTER,
+    )
+    cell_style = ParagraphStyle(
+        'LotoPdfCell', parent=styles['Normal'], fontSize=9, leading=11, alignment=TA_LEFT,
+    )
+
+    columns = treeview.cget("columns")
+    data = [[Paragraph(xml_escape(str(col)), header_style) for col in columns]]
+
+    for child in treeview.get_children():
+        row_values = treeview.item(child, "values")
+        data.append([Paragraph(xml_escape(str(v)), cell_style) for v in row_values])
+
+    total_rows = len(treeview.get_children())
+
+    # Column widths proportional to the Treeview's own on-screen widths,
+    # scaled to the PDF's printable width — single source of truth instead
+    # of a second hardcoded set of widths that could drift out of sync.
+    col_pixel_widths = [treeview.column(col, 'width') for col in columns]
+    total_pixels = sum(col_pixel_widths)
+    printable_width = A4[0] - 72  # 36pt left + 36pt right margin
+    col_widths = [w / total_pixels * printable_width for w in col_pixel_widths]
+
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    style = TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ])
+    table.setStyle(style)
+
+    current_date = datetime.now().strftime("%d/%m/%Y")
+    elements.append(table)
+    total_rows_text = Paragraph(
+        f"Total lock box is: {total_rows} <font size=8 color=grey>    (as of: {current_date})</font>",
+        styles['Normal']
+    )
+    elements.append(total_rows_text)
+
+    pdf.build(elements)
+    print(f"PDF saved successfully as {file_name}")
 
 
 def main():
@@ -1653,58 +1717,10 @@ def main():
         postpone_button_in_overview_GUI.destroy()
         detail_overview_GUI.destroy()
 
-    def capture_table_to_pdf(treeview, file_name):
-        # Set up the PDF document
-        pdf = SimpleDocTemplate(file_name, pagesize=A4)
-        elements = []
-        
-        # Table header
-        data = [treeview.cget("columns")]
-        
-        # Add all rows of the Treeview to the data list
-        for child in treeview.get_children():
-            row = [treeview.item(child, "values")[i] for i in range(len(data[0]))]
-            data.append(row)
-        
-        # Calculate the total number of rows (excluding the header)
-        total_rows = len(treeview.get_children())
-
-        # Create the table in the PDF
-        table = Table(data)
-        
-        # Define table style
-        style = TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ])
-        table.setStyle(style)
-        
-        # Get the current date
-        current_date = datetime.now().strftime("%d/%m/%Y")
-
-        # Add the table to elements and build the PDF
-        elements.append(table)
-        # Add total rows count text
-        styles = getSampleStyleSheet()
-        total_rows_text = Paragraph(
-            f"Total lock box is: {total_rows} <font size=8 color=grey>    (as of: {current_date})</font>", styles['Normal']
-        )
-        elements.append(total_rows_text)
-        
-        # Build the PDF
-        pdf.build(elements)
-        
-        print(f"PDF saved successfully as {file_name}")
-
     def save_table_as_pdf(treeview):
         # Define the default directory and file name
-        default_directory = resource_path("L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO/LOTOList")  # Replace with your desired path
+        # default_directory = resource_path("L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO/LOTOList")  # Replace with your desired path
+        default_directory = resource_path("C:/Users/wechp/OneDrive - PTT GROUP/PTTLNG/3.Project/1.LNG Project/2024/2.LOTO Project/LOTOList")  
         default_file_name = f"{datetime.now().strftime('%Y_%m_%d')}_LOTO_WorkList.pdf"
         
         # Construct the full path for the file
