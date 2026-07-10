@@ -284,6 +284,13 @@ def capture_table_to_pdf(treeview, file_name):
     print(f"PDF saved successfully as {file_name}")
 
 
+def is_text_truncated(text, font, column_width, padding=10):
+    """True if `text` rendered in `font` would overflow a Treeview column of
+    `column_width` pixels — i.e. native ellipsis truncation would kick in.
+    `padding` accounts for the cell's internal padding/borders."""
+    return font.measure(text) > column_width - padding
+
+
 def main():
     cleanup_stale_backup()  # remove the .bak a previous update left behind (see perform_update)
 
