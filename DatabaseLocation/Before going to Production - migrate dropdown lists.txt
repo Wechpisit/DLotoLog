@@ -1,0 +1,26 @@
+ก่อนขึ้น Production จริง ต้อง migrate ตาราง employees / dropdown_options ก่อน!
+
+ฟีเจอร์นี้ย้าย dropdown lists (owner, section manager, LO member, department,
+area, machine) จาก hardcode ในโค้ด ไปเก็บใน 2 ตารางของ database:
+employees และ dropdown_options
+
+ตอนพัฒนา ได้รัน migrate_dropdown_lists.py กับ dev DB ไปแล้ว (ดู commit
+"Run dropdown-list migration against dev database") แต่ยังไม่เคยรันกับ
+production DB (L:\4.4LO.T1\06-Operational_and_Record\6.56 LOTO\loto_data.db)
+
+migrate_dropdown_lists.py อ่านรายชื่อ/ตัวเลือกโดย parse โค้ดจาก list_setup()
+ใน D-Loto.py ซึ่งถูกลบออกจากไฟล์ปัจจุบันแล้ว (หลัง commit "Wire
+load_dropdown_lists()/reload_dropdown_lists() into main(), remove hardcoded
+list_setup()") ต้องดึงไฟล์ D-Loto.py เวอร์ชันก่อนถูกลบมาใช้แทน:
+
+    git log --oneline -- D-Loto.py
+    (หา commit ก่อนหน้า commit ที่ชื่อ "Wire load_dropdown_lists()... remove
+    hardcoded list_setup()" แล้วใช้ commit นั้น)
+
+    git show <commit-hash-ก่อนลบ>:D-Loto.py > old_D-Loto.py
+    python migrate_dropdown_lists.py "L:/4.4LO.T1/06-Operational_and_Record/6.56 LOTO/loto_data.db" old_D-Loto.py
+
+รันคำสั่งด้านบนแล้วเช็คผลลัพธ์ว่า "Migration complete: <N> employees, <M>
+dropdown options seeded" ก่อนปล่อยให้ users เชื่อมต่อ production DB
+
+ดูรายละเอียดทั้งหมดได้ที่ docs/superpowers/specs/2026-07-10-dropdown-lists-to-database-design.md

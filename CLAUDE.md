@@ -99,7 +99,7 @@ python test_loto.py
 **Key files to modify**:
 - Version number: D-Loto.py:28
 - Environment switch (`dev`/`prod`): D-Loto.py:33
-- Employee lists: D-Loto.py:429-490 (`list_setup()` function)
+- Employee/dropdown lists: `employees` and `dropdown_options` tables in the DB (loaded via `load_dropdown_lists()`, D-Loto.py) — edit via SQL, not code. See `migrate_dropdown_lists.py` for the one-time seed script.
 - Database path: config.json or D-Loto.py:50-55 (ENV-based directory selection)
 - Build configuration: TestBuildFromCommandLine/D-Loto.spec
 
@@ -201,15 +201,13 @@ Three main SQLite tables with status-based workflow:
 - High DPI awareness enabled via `ctypes.windll.shcore.SetProcessDpiAwareness(1)`
 - Scaling factor calculated based on screen DPI (D-Loto.py:205)
 
-**Business Data** (D-Loto.py:429-490):
-- Hardcoded dropdown lists defined in `list_setup()` function:
-  - `incharge_list`: Departments (MT.Mech, MT.Ins, MT.Elec, ED.*, Project, LO., etc.)
-  - `owner_list`: 200+ employee names (full employee roster)
-  - `sectionmgr_list`: Section managers (6 names)
-  - `lomember_list`: LO (Lock Out) team members (~35 names)
-  - `area_list`: Work areas (HP Pump, BOG Compressor, Jetty, etc.)
-- These lists are critical for data validation and dropdown population
-- Updating employee names or departments requires modifying `list_setup()`
+**Business Data** (`load_dropdown_lists()` in D-Loto.py, reads from the DB):
+- `employees` table: name, email, `is_sectionmgr`/`is_lomember` role flags, `active` flag — one row per person, since owner/section-manager/LO-member roles overlap on the same people. Derives `owner_list` (all active), `sectionmgr_list` (active + `is_sectionmgr=1`), `lomember_list` (active + `is_lomember=1`), `email_list` (name→email dict, currently unused by any code path but preserved for future use).
+- `dropdown_options` table: flat `(list_name, value, active)` rows for `incharge` (departments), `area` (work areas), and `machine` (equipment) — no role overlap between these three, so one generic table covers all of them.
+- No sort order is stored — `input_field_dropdown`/`input_field_dropdown_linebreak` already alphabetize at construction time.
+- To add/edit/remove an option: run SQL directly against the DB (e.g. `INSERT INTO employees (name, is_lomember, active) VALUES ('New.Person', 1, 1);` or `UPDATE employees SET active=0 WHERE name='Old.Person';`) — never delete rows, use the `active` flag so historical LOTO records (which store names as plain text) stay unaffected.
+- Running clients pick up changes via the existing refresh button (calls `refresh_treeview()`, which now also calls `reload_dropdown_lists()`) — no restart needed.
+- See `docs/superpowers/specs/2026-07-10-dropdown-lists-to-database-design.md` for the full design.
 
 **Data Flow**:
 1. New work entries → `loto_new` table (via `insert_new_loto()`)
