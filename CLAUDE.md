@@ -6,6 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Always use `AskUserQuestion` tool when any requirement is unclear before implementing.** Do not assume or proceed with guesses. Confirm first, implement after.
 
+## Agent skills
+
+### Issue tracker
+
+Issues tracked as GitHub Issues on `Wechpisit/DLotoLog` via the `gh` CLI. External PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Uses the default 5-role label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) unchanged. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
 ## Skills to Invoke
 
 Skills available depend on the user's installed Claude Code plugins and may change over time — treat this list as guidance current as of 2026-07, not a guarantee. When starting work in this repo, check which of these apply before acting.
@@ -165,11 +179,18 @@ Three main SQLite tables with status-based workflow:
 
 ### Auto-Update Check
 
-- An `app_info` table stores a `version` key in the SQLite DB, seeded with the running app's `rev` on first launch (`INSERT OR IGNORE`)
+- An `app_info` table stores a `version` key in the SQLite DB, seeded with the running app's `rev` on first launch (`INSERT OR IGNORE`). A second key, `exe_path`, holds the admin-set filesystem path to the new `.exe` (e.g. `L:/4.4LO.T1/___LOTO___/D-Loto.exe` in prod) — set manually via `UPDATE app_info SET value = '...' WHERE key = 'exe_path'` when rolling out a new build.
 - On startup, `check_and_update()` compares the DB-stored version against the local `rev`, using `scaling_factor`/`ttk.Style`/`configure_button_styles()` set up right after `root = tk.Tk()` (moved earlier specifically so this dialog can use them — see `design-system.md`)
-  - If the DB version is newer, shows a themed modal dialog (`#dcdad5` background, Tahoma font, `Custom2.TButton` buttons, `⚠️` icon — follows `design-system.md`) with two choices: **"อัพเดทเวอร์ชัน"** (currently a placeholder — real auto-copy/relaunch logic is a planned follow-up) and **"ปิดโปรแกรม"** (closes immediately)
+  - If the DB version is newer, shows a themed modal dialog (`#dcdad5` background, Tahoma font, `Custom2.TButton` buttons, `⚠️` icon — follows `design-system.md`) with two choices: **"อัพเดทเวอร์ชัน"** and **"ปิดโปรแกรม"** (closes immediately)
+  - Clicking "อัพเดทเวอร์ชัน" calls `perform_update(exe_path)`, which does the whole swap+relaunch **in-process, in pure Python** — no batch script or `cmd.exe` involved (an earlier batch-script-based design intermittently crashed with "Failed to load Python DLL"; see `docs/lessons-learned/2026-07-10-auto-update-relaunch.md` for the full root-cause writeup):
+    1. `swap_in_new_exe()` renames the currently-running exe to `<exe>.bak` (Windows allows renaming a running exe's file, just not deleting it), copies the new exe to a staging name, then renames it into place
+    2. Launches the new exe via `subprocess.Popen`, passing a stripped copy of `os.environ` (drops `_MEI*`/`_PYI*` PyInstaller bootstrap vars) — without this, the child (itself a frozen onefile build) inherits the parent's bootstrap state and fails to self-extract
+    3. Waits up to 20s for the new process to write the startup marker file (`%TEMP%\dloto_started.flag`, written by `mark_startup_success()` once the new instance's main window is shown)
+    4. **Success**: shows a confirmation popup, then `root.destroy()` + `os._exit(0)` (a plain `sys.exit()` inside a Tk callback gets swallowed by Tkinter). The `.bak` is **not** deleted here — it's still the exiting process's own locked image file — `cleanup_stale_backup()` deletes it on the *next* app startup instead, once the old process is gone.
+    5. **Failure/timeout**: `kill_process_tree()` (`taskkill /T`, not `Popen.kill()` — a onefile build is actually two OS processes, bootloader + interpreter) kills the hung new process, `os.replace()` restores the `.bak`, and the original process keeps running untouched
   - Update folder referenced in the dialog text: `update/` (dev) or `L:/4.4LO.T1/___LOTO___` (prod)
-- To roll out a new version: bump `rev`, update the `app_info.version` row in the shared DB (e.g. via a manual `UPDATE`), and drop the new `.exe` in the update folder — existing clients will detect the mismatch and prompt users to update
+- To roll out a new version: bump `rev`, update the `app_info.version` row in the shared DB, set/confirm `app_info.exe_path` points at the new build's location, and drop the new `.exe` there — existing clients will detect the mismatch and prompt users to update
+- Core functions are module-level (not nested in `main()`), so they're unit-testable in isolation — see `test_auto_update.py`
 - **Editing this logic**: only edit the root `D-Loto.py` — `TestBuildFromCommandLine/D-Loto.py` is synced from it automatically by `build.ps1` (see Build and Distribution above), don't hand-edit both copies
 
 ### Key Components
